@@ -1,3 +1,4 @@
+import json
 import os
 import re
 import subprocess
@@ -14,9 +15,28 @@ SLUG_RE = re.compile(r"^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?$")
 app = Flask(__name__)
 
 REPOS: dict[str, str] = {}
+REPOS_FILE = Path(os.environ.get("DIFFER_REPOS_FILE", "~/.config/differ/repos.json")).expanduser()
 
 # Per-repo comment store: {repo_slug: {comment_id: comment_dict}}
 comments: dict[str, dict[str, dict[str, Any]]] = {}
+
+
+def load_repos() -> dict[str, str]:
+    """Load repo mappings from disk."""
+    if REPOS_FILE.exists():
+        try:
+            data = json.loads(REPOS_FILE.read_text())
+            if isinstance(data, dict):
+                return {k: v for k, v in data.items() if isinstance(k, str) and isinstance(v, str)}
+        except (json.JSONDecodeError, OSError):
+            pass
+    return {}
+
+
+def save_repos() -> None:
+    """Persist repo mappings to disk."""
+    REPOS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    REPOS_FILE.write_text(json.dumps(REPOS, indent=2) + "\n")
 
 
 def parse_diff(diff_text: str) -> list[dict[str, Any]]:
@@ -224,6 +244,7 @@ def add_repo() -> tuple[Response, int] | Response:
         return jsonify({"error": f"Repo '{slug}' already exists"}), 409
 
     REPOS[slug] = path
+    save_repos()
     return jsonify({"slug": slug, "path": path}), 201
 
 
@@ -241,6 +262,7 @@ def update_repo(slug: str) -> tuple[Response, int] | Response:
         return jsonify({"error": "path must be an existing directory"}), 400
 
     REPOS[slug] = path
+    save_repos()
     return jsonify({"slug": slug, "path": path})
 
 
@@ -250,6 +272,7 @@ def delete_repo(slug: str) -> tuple[Response, int] | tuple[str, int]:
         return jsonify({"error": f"Repo '{slug}' not found"}), 404
 
     del REPOS[slug]
+    save_repos()
     comments.pop(slug, None)
     return "", 204
 
@@ -360,14 +383,16 @@ def main() -> None:
     if len(sys.argv) > 1:
         path = str(Path(sys.argv[1]).resolve())
         REPOS = {"default": path}
+        save_repos()
     else:
-        REPOS = {}
+        REPOS = load_repos()
 
     if REPOS:
         repo_list = ", ".join(f"{slug} -> {path}" for slug, path in REPOS.items())
         print(f"Differ: monitoring repos: {repo_list}")
     else:
         print("Differ: no repos configured — add repos via the web UI")
+    print(f"Repos file: {REPOS_FILE}")
     print("Running on http://localhost:5001")
     app.run(host="127.0.0.1", port=5001, debug=True)
 

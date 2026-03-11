@@ -67,4 +67,4 @@ uv run --with tox-uv tox
 uv run differ
 ```
 
-All state (repos and comments) is in-memory — nothing persists across restarts.
+Repo mappings are persisted to `~/.config/differ/repos.json` (override with `DIFFER_REPOS_FILE` env var). Comments are in-memory only.
