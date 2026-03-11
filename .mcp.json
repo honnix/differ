@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "differ": {
+      "command": "uv",
+      "args": ["run", "differ-mcp"]
+    }
+  }
+}

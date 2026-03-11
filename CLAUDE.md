@@ -18,9 +18,11 @@ Server runs on http://localhost:5001.
 ```
 src/differ/
   app.py              # Flask app — all routes and logic
+  mcp_server.py       # MCP server — exposes Differ API as tools
   templates/
     repos.html        # Repo management page (index)
     index.html        # Diff viewer for a single repo
+.mcp.json             # MCP server config for Claude Code
 ```
 
 ## API
@@ -56,6 +58,12 @@ Slug must be alphanumeric + hyphens. Path must be an existing directory on disk.
 - **Inline comments**: click a line number to select, shift+click to extend range, then click `+` to comment
 - **Edit / Delete** comments inline
 - **Reload** button: re-fetches the diff and clears all comments
+
+## MCP integration
+
+The `.mcp.json` at the repo root configures an MCP server so Claude Code can interact with a running Differ instance. Tools: `list_repos`, `add_repo`, `remove_repo`, `get_diff`, `list_comments`, `create_comment`, `update_comment`, `delete_comment`, `clear_comments`.
+
+Start the Differ web app first (`uv run differ`), then Claude Code will auto-connect via `uv run differ-mcp`.
 
 ## Development
 

@@ -3,10 +3,11 @@ name = "differ"
 version = "0.1.0"
 description = "GitHub-style PR diff viewer with inline comments"
 requires-python = ">=3.11"
-dependencies = ["flask>=3.0"]
+dependencies = ["flask>=3.0", "mcp[cli]>=1.0"]
 
 [project.scripts]
 differ = "differ.app:main"
+differ-mcp = "differ.mcp_server:main"
 
 [tool.ruff]
 line-length = 99
