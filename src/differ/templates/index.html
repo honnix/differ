@@ -426,6 +426,130 @@ h1 {
 }
 .btn-reload:hover { background: #30363d; }
 
+/* File tree sidebar */
+.main-layout {
+  display: flex;
+  gap: 0;
+}
+
+.file-tree-sidebar {
+  width: 260px;
+  min-width: 260px;
+  max-height: calc(100vh - 100px);
+  position: sticky;
+  top: 16px;
+  overflow-y: auto;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  background: #161b22;
+  margin-right: 12px;
+  display: none;
+  flex-shrink: 0;
+}
+
+.file-tree-sidebar.open { display: block; }
+
+.file-tree-header {
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  border-bottom: 1px solid #30363d;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: sticky;
+  top: 0;
+  background: #161b22;
+  z-index: 1;
+}
+
+.file-tree-header span { color: #8b949e; font-weight: 400; }
+
+.file-tree-filter {
+  width: 100%;
+  padding: 4px 8px;
+  margin: 6px 8px;
+  width: calc(100% - 16px);
+  background: #0d1117;
+  color: #e6edf3;
+  border: 1px solid #30363d;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: inherit;
+}
+
+.file-tree-filter::placeholder { color: #484f58; }
+.file-tree-filter:focus { outline: none; border-color: #58a6ff; }
+
+.tree-dir {
+  cursor: pointer;
+  user-select: none;
+}
+
+.tree-dir-label {
+  padding: 3px 8px;
+  font-size: 12px;
+  color: #8b949e;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tree-dir-label:hover { background: #1c2128; }
+
+.tree-dir-children {
+  display: block;
+}
+
+.tree-dir.collapsed > .tree-dir-children { display: none; }
+
+.tree-dir-arrow {
+  display: inline-block;
+  width: 12px;
+  font-size: 10px;
+  text-align: center;
+  transition: transform 0.1s;
+}
+
+.tree-dir.collapsed > .tree-dir-label .tree-dir-arrow {
+  transform: rotate(-90deg);
+}
+
+.tree-file {
+  padding: 3px 8px 3px 24px;
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  color: #e6edf3;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tree-file:hover { background: #1c2128; }
+.tree-file.active { background: rgba(31, 111, 235, 0.15); color: #58a6ff; }
+
+.tree-file-nested { padding-left: 36px; }
+.tree-file-nested-2 { padding-left: 48px; }
+.tree-file-nested-3 { padding-left: 60px; }
+
+.diff-content { flex: 1; min-width: 0; }
+
+.btn-tree-toggle {
+  padding: 5px 14px;
+  background: #21262d;
+  color: #e6edf3;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-tree-toggle:hover { background: #30363d; }
+.btn-tree-toggle.active { background: #1f6feb; color: #fff; border-color: #1f6feb; }
+
 /* Highlight matching text in search */
 .file-search-item mark {
   background: rgba(210, 153, 34, 0.4);
@@ -438,6 +562,7 @@ h1 {
 <h1><a href="/" style="color:inherit;text-decoration:none;">Differ</a> / {{ repo_slug }}</h1>
 
 <div class="toolbar">
+  <button class="btn-tree-toggle" id="btn-tree-toggle" onclick="toggleFileTree()" title="Toggle file tree">Files</button>
   <div class="view-toggle">
     <button id="btn-unified" onclick="setView('unified')">Unified</button>
     <button id="btn-split" class="active" onclick="setView('split')">Split</button>
@@ -452,7 +577,14 @@ h1 {
   <button class="btn-reload" onclick="reloadDiff()" title="Reload diff and clear comments">Reload</button>
 </div>
 
-<div id="app"><div class="loading">Loading diff...</div></div>
+<div class="main-layout">
+  <div class="file-tree-sidebar" id="file-tree-sidebar">
+    <div class="file-tree-header">Files <span id="tree-file-count"></span></div>
+    <input type="text" class="file-tree-filter" id="file-tree-filter" placeholder="Filter files..." autocomplete="off">
+    <div id="file-tree-content"></div>
+  </div>
+  <div class="diff-content" id="app"><div class="loading">Loading diff...</div></div>
+</div>
 
 <script>
 const appEl = document.getElementById('app');
@@ -460,12 +592,114 @@ const repoSlug = {{ repo_slug | tojson }};
 let diffData = [];
 let commentsData = [];
 let viewMode = 'split'; // 'unified' | 'split'
+let fileTreeOpen = false;
 
 // --- File search state ---
 const searchInput = document.getElementById('file-search-input');
 const searchDropdown = document.getElementById('file-search-dropdown');
 const fileCountEl = document.getElementById('file-count');
 let searchActiveIdx = -1;
+
+// --- File tree ---
+const treeToggleBtn = document.getElementById('btn-tree-toggle');
+const treeSidebar = document.getElementById('file-tree-sidebar');
+const treeContent = document.getElementById('file-tree-content');
+const treeFileCount = document.getElementById('tree-file-count');
+const treeFilter = document.getElementById('file-tree-filter');
+
+function toggleFileTree() {
+  fileTreeOpen = !fileTreeOpen;
+  treeSidebar.classList.toggle('open', fileTreeOpen);
+  treeToggleBtn.classList.toggle('active', fileTreeOpen);
+  if (fileTreeOpen) renderFileTree();
+}
+
+function buildTree(files) {
+  const root = {};
+  files.forEach((file, idx) => {
+    const name = file.old_name === file.new_name ? file.new_name : file.new_name;
+    const parts = name.split('/');
+    let node = root;
+    for (let i = 0; i < parts.length - 1; i++) {
+      if (!node[parts[i]]) node[parts[i]] = {};
+      node = node[parts[i]];
+    }
+    node[parts[parts.length - 1]] = idx;
+  });
+  return root;
+}
+
+function renderFileTree(filter) {
+  const q = (filter || '').toLowerCase();
+  treeContent.innerHTML = '';
+  treeFileCount.textContent = `(${diffData.length})`;
+
+  const tree = buildTree(diffData);
+  renderTreeNode(tree, treeContent, 0, q);
+}
+
+function renderTreeNode(node, parentEl, depth, filter) {
+  const keys = Object.keys(node).sort((a, b) => {
+    const aIsDir = typeof node[a] === 'object';
+    const bIsDir = typeof node[b] === 'object';
+    if (aIsDir !== bIsDir) return aIsDir ? -1 : 1;
+    return a.localeCompare(b);
+  });
+
+  for (const key of keys) {
+    const val = node[key];
+
+    if (typeof val === 'object') {
+      // Directory
+      const dirEl = document.createElement('div');
+      dirEl.className = 'tree-dir';
+
+      const label = document.createElement('div');
+      label.className = 'tree-dir-label';
+      label.style.paddingLeft = (8 + depth * 12) + 'px';
+      label.innerHTML = `<span class="tree-dir-arrow">\u25BC</span>${escapeHtml(key)}/`;
+      label.addEventListener('click', () => dirEl.classList.toggle('collapsed'));
+
+      const children = document.createElement('div');
+      children.className = 'tree-dir-children';
+
+      dirEl.appendChild(label);
+      dirEl.appendChild(children);
+
+      renderTreeNode(val, children, depth + 1, filter);
+
+      // Hide dir if all children filtered out
+      if (filter && children.children.length === 0) continue;
+
+      parentEl.appendChild(dirEl);
+    } else {
+      // File (val is the index)
+      const idx = val;
+      const file = diffData[idx];
+      const fullName = file.old_name === file.new_name ? file.new_name : file.new_name;
+
+      if (filter && !fullName.toLowerCase().includes(filter)) continue;
+
+      const fileEl = document.createElement('div');
+      fileEl.className = 'tree-file';
+      fileEl.style.paddingLeft = (8 + (depth + 1) * 12) + 'px';
+      fileEl.textContent = key;
+      fileEl.title = fullName;
+      fileEl.dataset.fileIdx = idx;
+
+      fileEl.addEventListener('click', () => {
+        // Highlight active
+        treeContent.querySelectorAll('.tree-file').forEach(el => el.classList.remove('active'));
+        fileEl.classList.add('active');
+        scrollToFile(idx);
+      });
+
+      parentEl.appendChild(fileEl);
+    }
+  }
+}
+
+treeFilter.addEventListener('input', () => renderFileTree(treeFilter.value));
 
 async function reloadDiff() {
   await fetch(`/${repoSlug}/api/comments`, { method: 'DELETE' });
@@ -659,6 +893,7 @@ function render() {
   }
 
   fileCountEl.textContent = `${diffData.length} file${diffData.length !== 1 ? 's' : ''} changed`;
+  if (fileTreeOpen) renderFileTree(treeFilter.value);
   appEl.innerHTML = '';
 
   for (const file of diffData) {
@@ -1282,6 +1517,11 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
     searchInput.focus();
     renderFileDropdown('');
+  }
+  // Cmd/Ctrl+B to toggle file tree
+  if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
+    e.preventDefault();
+    toggleFileTree();
   }
 });
 
