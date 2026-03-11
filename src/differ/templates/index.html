@@ -147,8 +147,71 @@ h1 {
   display: flex;
   align-items: center;
   gap: 8px;
+  cursor: pointer;
+  user-select: none;
 }
 
+.file-card.collapsed .file-body { display: none; }
+.file-card.collapsed .file-header { border-bottom: none; }
+
+.fold-arrow {
+  display: inline-block;
+  font-size: 10px;
+  color: #8b949e;
+  transition: transform 0.1s;
+  width: 12px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.file-card.collapsed .fold-arrow { transform: rotate(-90deg); }
+
+
+/* Viewed checkbox in file header */
+.viewed-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 400;
+  color: #8b949e;
+  cursor: pointer;
+  margin-left: auto;
+  white-space: nowrap;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+}
+
+.viewed-label input { cursor: pointer; }
+.viewed-label:hover { color: #e6edf3; }
+
+.file-card.viewed { opacity: 0.6; }
+.file-card.viewed .file-header { background: #0d1117; }
+
+/* Viewed progress in toolbar */
+.viewed-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #8b949e;
+  white-space: nowrap;
+  margin-left: auto;
+}
+
+.viewed-progress-bar {
+  width: 100px;
+  height: 6px;
+  background: #21262d;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.viewed-progress-fill {
+  height: 100%;
+  background: #3fb950;
+  border-radius: 3px;
+  transition: width 0.2s;
+}
 
 .copy-btn {
   background: none;
@@ -595,6 +658,10 @@ h1 {
   </div>
   <span class="file-count" id="file-count"></span>
   <button class="btn-reload" onclick="reloadDiff()" title="Reload diff and clear comments">Reload</button>
+  <div class="viewed-progress" id="viewed-progress" style="display:none">
+    <div class="viewed-progress-bar"><div class="viewed-progress-fill" id="viewed-progress-fill"></div></div>
+    <span id="viewed-count-text"></span>
+  </div>
 </div>
 
 <div class="main-layout">
@@ -613,6 +680,7 @@ let diffData = [];
 let commentsData = [];
 let viewMode = 'split'; // 'unified' | 'split'
 let fileTreeOpen = false;
+const viewedFiles = new Set(); // tracks viewed file names
 
 // --- File search state ---
 const searchInput = document.getElementById('file-search-input');
@@ -721,10 +789,26 @@ function renderTreeNode(node, parentEl, depth, filter) {
 
 treeFilter.addEventListener('input', () => renderFileTree(treeFilter.value));
 
+function updateViewedProgress() {
+  const total = diffData.length;
+  const viewed = viewedFiles.size;
+  const progressEl = document.getElementById('viewed-progress');
+  const fillEl = document.getElementById('viewed-progress-fill');
+  const textEl = document.getElementById('viewed-count-text');
+  if (total === 0) {
+    progressEl.style.display = 'none';
+    return;
+  }
+  progressEl.style.display = 'flex';
+  fillEl.style.width = `${(viewed / total) * 100}%`;
+  textEl.textContent = `${viewed} / ${total} files viewed`;
+}
+
 async function reloadDiff() {
   await fetch(`/${repoSlug}/api/comments`, { method: 'DELETE' });
   await fetchDiff();
   commentsData = [];
+  viewedFiles.clear();
   render();
 }
 
@@ -925,6 +1009,10 @@ function render() {
       : `${file.old_name} \u2192 ${file.new_name}`;
     const header = document.createElement('div');
     header.className = 'file-header';
+    const foldArrow = document.createElement('span');
+    foldArrow.className = 'fold-arrow';
+    foldArrow.textContent = '\u25BC';
+    header.appendChild(foldArrow);
     const nameSpan = document.createElement('span');
     nameSpan.className = 'file-header-name';
     nameSpan.textContent = fileName;
@@ -933,34 +1021,59 @@ function render() {
     copyBtn.className = 'copy-btn';
     copyBtn.title = 'Copy file path';
     copyBtn.innerHTML = '\u2398';
-    copyBtn.addEventListener('click', () => {
+    copyBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
       navigator.clipboard.writeText(file.new_name);
       copyBtn.classList.add('copied');
       copyBtn.innerHTML = '\u2713';
       setTimeout(() => { copyBtn.classList.remove('copied'); copyBtn.innerHTML = '\u2398'; }, 1500);
     });
     header.appendChild(copyBtn);
+    const viewedLabel = document.createElement('label');
+    viewedLabel.className = 'viewed-label';
+    viewedLabel.addEventListener('click', (e) => e.stopPropagation());
+    const viewedCb = document.createElement('input');
+    viewedCb.type = 'checkbox';
+    viewedCb.checked = viewedFiles.has(file.new_name);
+    viewedCb.addEventListener('change', () => {
+      if (viewedCb.checked) {
+        viewedFiles.add(file.new_name);
+        card.classList.add('viewed', 'collapsed');
+      } else {
+        viewedFiles.delete(file.new_name);
+        card.classList.remove('viewed', 'collapsed');
+      }
+      updateViewedProgress();
+    });
+    viewedLabel.appendChild(viewedCb);
+    viewedLabel.appendChild(document.createTextNode('Viewed'));
+    header.appendChild(viewedLabel);
+
+    header.addEventListener('click', () => card.classList.toggle('collapsed'));
     card.appendChild(header);
+    if (viewedFiles.has(file.new_name)) card.classList.add('viewed', 'collapsed');
+
+    const body = document.createElement('div');
+    body.className = 'file-body';
 
     if (file.binary) {
       const notice = document.createElement('div');
       notice.className = 'binary-notice';
       notice.textContent = 'Binary file not shown.';
-      card.appendChild(notice);
-      appEl.appendChild(card);
-      continue;
+      body.appendChild(notice);
+    } else if (viewMode === 'unified') {
+      body.appendChild(renderUnifiedTable(file));
+    } else {
+      body.appendChild(renderSplitTable(file));
     }
 
-    if (viewMode === 'unified') {
-      card.appendChild(renderUnifiedTable(file));
-    } else {
-      card.appendChild(renderSplitTable(file));
-    }
+    card.appendChild(body);
 
     appEl.appendChild(card);
   }
 
   renderComments();
+  updateViewedProgress();
 }
 
 // =====================
