@@ -2,6 +2,7 @@ import os
 import re
 import subprocess
 import sys
+import threading
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -367,6 +368,14 @@ def main():
         print(f"Differ: monitoring repos: {repo_list}")
     else:
         print("Differ: no repos configured — add repos via the web UI")
+
+    # Start MCP server in background thread
+    from differ.mcp_server import run_mcp
+
+    mcp_thread = threading.Thread(target=run_mcp, kwargs={"port": 5002}, daemon=True)
+    mcp_thread.start()
+    print("MCP server on http://localhost:5002/sse")
+
     print("Running on http://localhost:5001")
     app.run(host="127.0.0.1", port=5001, debug=True)
 

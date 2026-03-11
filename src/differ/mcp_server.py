@@ -1,44 +1,26 @@
-"""MCP server exposing Differ capabilities as tools."""
+"""MCP server exposing Differ capabilities as tools.
+
+Operates directly on the in-memory state in app.py — no HTTP proxy.
+Started automatically as a background thread when the Flask app runs.
+"""
 
 import json
-import urllib.error
-import urllib.request
+import os
+import uuid
+from datetime import datetime, timezone
 
 from mcp.server.fastmcp import FastMCP
+
+from differ import app as differ_app
 
 mcp = FastMCP(
     "differ",
     instructions="Interact with a local Differ instance (diff viewer with inline comments).",
 )
 
-BASE_URL = "http://localhost:5001"
 
-
-def _request(method: str, path: str, body: dict | None = None) -> tuple[int, str]:
-    url = f"{BASE_URL}{path}"
-    data = json.dumps(body).encode() if body else None
-    headers = {"Content-Type": "application/json"} if body else {}
-    req = urllib.request.Request(url, data=data, headers=headers, method=method)
-    try:
-        with urllib.request.urlopen(req) as resp:
-            return resp.status, resp.read().decode()
-    except urllib.error.HTTPError as e:
-        return e.code, e.read().decode()
-    except urllib.error.URLError as e:
-        return 0, f"Connection error: {e.reason}"
-
-
-def _json_request(method: str, path: str, body: dict | None = None) -> str:
-    status, text = _request(method, path, body)
-    if status == 0:
-        return text
-    try:
-        data = json.loads(text)
-        return json.dumps(data, indent=2)
-    except json.JSONDecodeError:
-        if status == 204:
-            return "Done."
-        return text or f"HTTP {status}"
+def _fmt(obj: object) -> str:
+    return json.dumps(obj, indent=2)
 
 
 # --- Repo management ---
@@ -47,25 +29,44 @@ def _json_request(method: str, path: str, body: dict | None = None) -> str:
 @mcp.tool()
 def list_repos() -> str:
     """List all configured repositories."""
-    return _json_request("GET", "/api/repos")
+    return _fmt([{"slug": s, "path": p} for s, p in differ_app.REPOS.items()])
 
 
 @mcp.tool()
 def add_repo(slug: str, path: str) -> str:
     """Add a repository. Slug must be alphanumeric+hyphens, path must exist on disk."""
-    return _json_request("POST", "/api/repos", {"slug": slug, "path": path})
+    slug = slug.strip()
+    path = path.strip()
+    if not slug or not differ_app.SLUG_RE.match(slug):
+        return _fmt({"error": "slug must be non-empty alphanumeric with hyphens"})
+    if not path or not os.path.isdir(path):
+        return _fmt({"error": "path must be an existing directory"})
+    if slug in differ_app.REPOS:
+        return _fmt({"error": f"Repo '{slug}' already exists"})
+    differ_app.REPOS[slug] = path
+    return _fmt({"slug": slug, "path": path})
 
 
 @mcp.tool()
 def update_repo(slug: str, path: str) -> str:
     """Update a repository's path."""
-    return _json_request("PUT", f"/api/repos/{slug}", {"path": path})
+    path = path.strip()
+    if slug not in differ_app.REPOS:
+        return _fmt({"error": f"Repo '{slug}' not found"})
+    if not path or not os.path.isdir(path):
+        return _fmt({"error": "path must be an existing directory"})
+    differ_app.REPOS[slug] = path
+    return _fmt({"slug": slug, "path": path})
 
 
 @mcp.tool()
 def remove_repo(slug: str) -> str:
     """Remove a repository and its comments."""
-    return _json_request("DELETE", f"/api/repos/{slug}")
+    if slug not in differ_app.REPOS:
+        return _fmt({"error": f"Repo '{slug}' not found"})
+    del differ_app.REPOS[slug]
+    differ_app.comments.pop(slug, None)
+    return "Done."
 
 
 # --- Diff ---
@@ -74,7 +75,12 @@ def remove_repo(slug: str) -> str:
 @mcp.tool()
 def get_diff(repo: str) -> str:
     """Get the parsed git diff for a repo. Returns structured file/hunk/line data."""
-    return _json_request("GET", f"/{repo}/api/diff")
+    path = differ_app.REPOS.get(repo)
+    if not path:
+        return _fmt({"error": f"Unknown repo: {repo}"})
+    diff_text = differ_app.get_diff(path)
+    parsed = differ_app.parse_diff(diff_text)
+    return _fmt(parsed)
 
 
 # --- Comments ---
@@ -83,10 +89,12 @@ def get_diff(repo: str) -> str:
 @mcp.tool()
 def list_comments(repo: str, file: str | None = None) -> str:
     """List comments for a repo, optionally filtered by file path."""
-    path = f"/{repo}/api/comments"
+    if repo not in differ_app.REPOS:
+        return _fmt({"error": f"Unknown repo: {repo}"})
+    repo_comments = differ_app.comments.get(repo, {})
     if file:
-        path += f"?file={urllib.request.quote(file)}"
-    return _json_request("GET", path)
+        repo_comments = {k: v for k, v in repo_comments.items() if v["file"] == file}
+    return _fmt(list(repo_comments.values()))
 
 
 @mcp.tool()
@@ -110,40 +118,57 @@ def create_comment(
         body: Comment text
         author: Comment author name
     """
-    return _json_request(
-        "POST",
-        f"/{repo}/api/comments",
-        {
-            "file": file,
-            "side": side,
-            "start_line": start_line,
-            "end_line": end_line,
-            "body": body,
-            "author": author,
-        },
-    )
+    if repo not in differ_app.REPOS:
+        return _fmt({"error": f"Unknown repo: {repo}"})
+    comment_id = str(uuid.uuid4())
+    comment = {
+        "id": comment_id,
+        "file": file,
+        "side": side,
+        "start_line": start_line,
+        "end_line": end_line,
+        "body": body,
+        "author": author,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    differ_app.comments.setdefault(repo, {})[comment_id] = comment
+    return _fmt(comment)
 
 
 @mcp.tool()
 def update_comment(repo: str, comment_id: str, body: str) -> str:
     """Update a comment's body text."""
-    return _json_request("PUT", f"/{repo}/api/comments/{comment_id}", {"body": body})
+    comment = differ_app.comments.get(repo, {}).get(comment_id)
+    if not comment:
+        return _fmt({"error": "Comment not found"})
+    comment["body"] = body
+    return _fmt(comment)
 
 
 @mcp.tool()
 def delete_comment(repo: str, comment_id: str) -> str:
     """Delete a single comment."""
-    return _json_request("DELETE", f"/{repo}/api/comments/{comment_id}")
+    repo_comments = differ_app.comments.get(repo, {})
+    if comment_id not in repo_comments:
+        return _fmt({"error": "Comment not found"})
+    del repo_comments[comment_id]
+    return "Done."
 
 
 @mcp.tool()
 def clear_comments(repo: str) -> str:
     """Clear all comments for a repo."""
-    return _json_request("DELETE", f"/{repo}/api/comments")
+    differ_app.comments.pop(repo, None)
+    return "Done."
 
 
-def main():
-    mcp.run(transport="stdio")
+def run_mcp(port: int = 5002) -> None:
+    """Start the MCP server with SSE transport."""
+    mcp.run(transport="sse", port=port)
+
+
+def main() -> None:
+    run_mcp()
 
 
 if __name__ == "__main__":

@@ -1,8 +1,7 @@
 {
   "mcpServers": {
     "differ": {
-      "command": "uv",
-      "args": ["run", "differ-mcp"]
+      "url": "http://localhost:5002/sse"
     }
   }
 }

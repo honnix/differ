@@ -61,9 +61,9 @@ Slug must be alphanumeric + hyphens. Path must be an existing directory on disk.
 
 ## MCP integration
 
-The `.mcp.json` at the repo root configures an MCP server so Claude Code can interact with a running Differ instance. Tools: `list_repos`, `add_repo`, `remove_repo`, `get_diff`, `list_comments`, `create_comment`, `update_comment`, `delete_comment`, `clear_comments`.
+`uv run differ` starts both the web UI (port 5001) and an MCP SSE server (port 5002) in the same process, sharing in-memory state. Claude Code auto-connects via `.mcp.json` → `http://localhost:5002/sse`.
 
-Start the Differ web app first (`uv run differ`), then Claude Code will auto-connect via `uv run differ-mcp`.
+Tools: `list_repos`, `add_repo`, `update_repo`, `remove_repo`, `get_diff`, `list_comments`, `create_comment`, `update_comment`, `delete_comment`, `clear_comments`.
 
 ## Development
 

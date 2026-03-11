@@ -7,7 +7,6 @@ dependencies = ["flask>=3.0", "mcp[cli]>=1.0"]
 
 [project.scripts]
 differ = "differ.app:main"
-differ-mcp = "differ.mcp_server:main"
 
 [tool.ruff]
 line-length = 99
