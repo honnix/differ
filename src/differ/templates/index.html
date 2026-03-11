@@ -144,7 +144,27 @@ h1 {
   position: sticky;
   top: 0;
   z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
+
+
+.copy-btn {
+  background: none;
+  border: 1px solid #30363d;
+  border-radius: 4px;
+  color: #8b949e;
+  cursor: pointer;
+  padding: 2px 5px;
+  font-size: 13px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+}
+
+.copy-btn:hover { color: #e6edf3; border-color: #8b949e; }
+.copy-btn.copied { color: #3fb950; border-color: #3fb950; }
 
 /* Unified diff table */
 .diff-table {
@@ -900,11 +920,26 @@ function render() {
     const card = document.createElement('div');
     card.className = 'file-card';
 
-    const header = document.createElement('div');
-    header.className = 'file-header';
-    header.textContent = file.old_name === file.new_name
+    const fileName = file.old_name === file.new_name
       ? file.new_name
       : `${file.old_name} \u2192 ${file.new_name}`;
+    const header = document.createElement('div');
+    header.className = 'file-header';
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'file-header-name';
+    nameSpan.textContent = fileName;
+    header.appendChild(nameSpan);
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'copy-btn';
+    copyBtn.title = 'Copy file path';
+    copyBtn.innerHTML = '\u2398';
+    copyBtn.addEventListener('click', () => {
+      navigator.clipboard.writeText(file.new_name);
+      copyBtn.classList.add('copied');
+      copyBtn.innerHTML = '\u2713';
+      setTimeout(() => { copyBtn.classList.remove('copied'); copyBtn.innerHTML = '\u2398'; }, 1500);
+    });
+    header.appendChild(copyBtn);
     card.appendChild(header);
 
     if (file.binary) {
