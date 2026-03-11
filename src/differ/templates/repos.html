@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Differ — Repositories</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  background: #0d1117;
+  color: #e6edf3;
+  padding: 16px;
+}
+
+h1 {
+  font-size: 20px;
+  margin-bottom: 16px;
+  font-weight: 600;
+}
+
+.add-form {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  align-items: center;
+}
+
+.add-form input {
+  padding: 8px 12px;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  background: #161b22;
+  color: #e6edf3;
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.add-form input::placeholder { color: #484f58; }
+
+.add-form input:focus {
+  outline: none;
+  border-color: #58a6ff;
+}
+
+.add-form button {
+  padding: 8px 16px;
+  border: 1px solid #238636;
+  border-radius: 6px;
+  background: #238636;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.add-form button:hover { background: #2ea043; }
+
+.error-msg {
+  color: #f85149;
+  font-size: 13px;
+  margin-bottom: 12px;
+  display: none;
+}
+
+.repo-list {
+  list-style: none;
+}
+
+.repo-list li {
+  margin-bottom: 8px;
+  display: flex;
+  align-items: stretch;
+}
+
+.repo-list a {
+  flex: 1;
+  display: block;
+  padding: 12px 16px;
+  border: 1px solid #30363d;
+  border-radius: 6px 0 0 6px;
+  background: #161b22;
+  color: #58a6ff;
+  text-decoration: none;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.repo-list li:only-child a,
+.repo-list a:only-child {
+  border-radius: 6px;
+}
+
+.repo-list a:hover {
+  background: #1c2128;
+  border-color: #58a6ff;
+}
+
+.repo-path {
+  font-size: 12px;
+  color: #8b949e;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  margin-top: 4px;
+}
+
+.delete-btn {
+  padding: 0 14px;
+  border: 1px solid #30363d;
+  border-left: none;
+  border-radius: 0 6px 6px 0;
+  background: #161b22;
+  color: #f85149;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+
+.delete-btn:hover {
+  background: #da3633;
+  color: #fff;
+  border-color: #da3633;
+}
+
+.empty-msg {
+  color: #8b949e;
+  font-size: 14px;
+  padding: 12px 0;
+}
+</style>
+</head>
+<body>
+<h1>Differ</h1>
+
+<form class="add-form" id="add-form">
+  <input type="text" id="slug-input" placeholder="slug" required>
+  <input type="text" id="path-input" placeholder="/path/to/repo" style="flex:1" required>
+  <button type="submit">Add repo</button>
+</form>
+<div class="error-msg" id="error-msg"></div>
+
+<ul class="repo-list" id="repo-list">
+  {% for slug, path in repos.items() %}
+  <li data-slug="{{ slug }}">
+    <a href="/{{ slug }}/">
+      {{ slug }}
+      <div class="repo-path">{{ path }}</div>
+    </a>
+    <button class="delete-btn" title="Delete repo">&times;</button>
+  </li>
+  {% endfor %}
+</ul>
+<div class="empty-msg" id="empty-msg" {% if repos %}style="display:none"{% endif %}>
+  No repositories configured. Add one above.
+</div>
+
+<script>
+const list = document.getElementById('repo-list');
+const form = document.getElementById('add-form');
+const slugInput = document.getElementById('slug-input');
+const pathInput = document.getElementById('path-input');
+const errorMsg = document.getElementById('error-msg');
+const emptyMsg = document.getElementById('empty-msg');
+
+function showError(msg) {
+  errorMsg.textContent = msg;
+  errorMsg.style.display = 'block';
+  setTimeout(() => { errorMsg.style.display = 'none'; }, 4000);
+}
+
+function updateEmpty() {
+  emptyMsg.style.display = list.children.length === 0 ? '' : 'none';
+}
+
+function addRepoItem(slug, path) {
+  const li = document.createElement('li');
+  li.dataset.slug = slug;
+  li.innerHTML =
+    '<a href="/' + slug + '/">' + slug +
+    '<div class="repo-path">' + path + '</div></a>' +
+    '<button class="delete-btn" title="Delete repo">&times;</button>';
+  list.appendChild(li);
+  updateEmpty();
+}
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const slug = slugInput.value.trim();
+  const path = pathInput.value.trim();
+  if (!slug || !path) return;
+
+  const res = await fetch('/api/repos', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ slug, path }),
+  });
+
+  if (res.ok) {
+    const data = await res.json();
+    addRepoItem(data.slug, data.path);
+    slugInput.value = '';
+    pathInput.value = '';
+  } else {
+    const data = await res.json();
+    showError(data.error || 'Failed to add repo');
+  }
+});
+
+list.addEventListener('click', async (e) => {
+  const btn = e.target.closest('.delete-btn');
+  if (!btn) return;
+  const li = btn.closest('li');
+  const slug = li.dataset.slug;
+
+  const res = await fetch('/api/repos/' + encodeURIComponent(slug), {
+    method: 'DELETE',
+  });
+
+  if (res.ok) {
+    li.remove();
+    updateEmpty();
+  } else {
+    showError('Failed to delete repo');
+  }
+});
+</script>
+</body>
+</html>

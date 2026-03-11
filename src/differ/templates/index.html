@@ -1,0 +1,1294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Differ — {{ repo_slug }}</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  background: #0d1117;
+  color: #e6edf3;
+  padding: 16px;
+}
+
+h1 {
+  font-size: 20px;
+  margin-bottom: 12px;
+  font-weight: 600;
+}
+
+/* Toolbar */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.view-toggle {
+  display: flex;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.view-toggle button {
+  padding: 5px 14px;
+  background: #21262d;
+  color: #e6edf3;
+  border: none;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border-right: 1px solid #30363d;
+}
+
+.view-toggle button:last-child { border-right: none; }
+.view-toggle button:hover { background: #30363d; }
+.view-toggle button.active { background: #1f6feb; color: #fff; }
+
+/* File search panel */
+.file-search-panel {
+  flex: 1;
+  position: relative;
+  min-width: 200px;
+  max-width: 500px;
+}
+
+.file-search-input {
+  width: 100%;
+  padding: 5px 10px 5px 28px;
+  background: #161b22;
+  color: #e6edf3;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.file-search-input::placeholder { color: #484f58; }
+.file-search-input:focus { outline: none; border-color: #58a6ff; }
+
+.file-search-icon {
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #484f58;
+  font-size: 13px;
+  pointer-events: none;
+}
+
+.file-search-dropdown {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 4px;
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  max-height: 320px;
+  overflow-y: auto;
+  z-index: 100;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+
+.file-search-dropdown.open { display: block; }
+
+.file-search-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  border-bottom: 1px solid #21262d;
+}
+
+.file-search-item:last-child { border-bottom: none; }
+.file-search-item:hover, .file-search-item.active { background: #1c2128; }
+.file-search-item .file-dir { color: #8b949e; }
+.file-search-item .file-base { color: #58a6ff; }
+
+.file-count {
+  font-size: 13px;
+  color: #8b949e;
+  white-space: nowrap;
+}
+
+/* File cards */
+.file-card {
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+
+.file-header {
+  background: #161b22;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  border-bottom: 1px solid #30363d;
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+/* Unified diff table */
+.diff-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  font-size: 12px;
+  line-height: 20px;
+  tab-size: 4;
+}
+
+.diff-table td {
+  padding: 0 8px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  vertical-align: top;
+}
+
+.line-num {
+  width: 1%;
+  min-width: 40px;
+  padding: 0 8px;
+  text-align: right;
+  color: #484f58;
+  user-select: none;
+  cursor: pointer;
+  position: relative;
+}
+
+.line-num:first-child { border-right: 1px solid #30363d; }
+.line-num:nth-child(2) { border-right: 1px solid #30363d; }
+
+.gutter-btn {
+  display: none;
+  position: absolute;
+  left: 2px;
+  top: 0;
+  width: 18px;
+  height: 18px;
+  background: #1f6feb;
+  color: #fff;
+  border: none;
+  border-radius: 3px;
+  font-size: 12px;
+  line-height: 18px;
+  text-align: center;
+  cursor: pointer;
+  z-index: 10;
+}
+
+.diff-row:hover .gutter-btn,
+.split-row:hover .gutter-btn { display: block; }
+.gutter-btn:hover { background: #388bfd; }
+
+.line-content { width: 100%; }
+
+/* Line type colors */
+.diff-row.addition { background: rgba(46, 160, 67, 0.15); }
+.diff-row.addition .line-content { background: rgba(46, 160, 67, 0.15); }
+.diff-row.addition .line-num { background: rgba(46, 160, 67, 0.1); }
+
+.diff-row.deletion { background: rgba(248, 81, 73, 0.15); }
+.diff-row.deletion .line-content { background: rgba(248, 81, 73, 0.15); }
+.diff-row.deletion .line-num { background: rgba(248, 81, 73, 0.1); }
+
+.diff-row.hunk-header {
+  background: rgba(56, 139, 253, 0.1);
+  color: #8b949e;
+}
+.diff-row.hunk-header td { padding: 4px 8px; }
+
+.diff-row.no_newline { color: #8b949e; }
+
+.diff-row.range-selected,
+.split-row.range-selected { outline: 2px solid #1f6feb; outline-offset: -2px; }
+
+/* Split view */
+.split-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  font-size: 12px;
+  line-height: 20px;
+  tab-size: 4;
+  table-layout: fixed;
+}
+
+.split-table td {
+  padding: 0 8px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  vertical-align: top;
+  overflow: hidden;
+}
+
+.split-table .line-num {
+  width: 44px;
+  min-width: 44px;
+  max-width: 44px;
+}
+
+.split-table .split-content {
+  width: 50%;
+}
+
+.split-table .split-divider {
+  width: 1px;
+  min-width: 1px;
+  max-width: 1px;
+  padding: 0;
+  background: #30363d;
+}
+
+.split-row.addition .split-right { background: rgba(46, 160, 67, 0.15); }
+.split-row.addition .split-right-num { background: rgba(46, 160, 67, 0.1); }
+.split-row.deletion .split-left { background: rgba(248, 81, 73, 0.15); }
+.split-row.deletion .split-left-num { background: rgba(248, 81, 73, 0.1); }
+.split-row.both .split-left { background: rgba(248, 81, 73, 0.15); }
+.split-row.both .split-left-num { background: rgba(248, 81, 73, 0.1); }
+.split-row.both .split-right { background: rgba(46, 160, 67, 0.15); }
+.split-row.both .split-right-num { background: rgba(46, 160, 67, 0.1); }
+
+.split-row.hunk-header td { padding: 4px 8px; color: #8b949e; background: rgba(56, 139, 253, 0.1); }
+
+.split-left-num { border-right: 1px solid #30363d; }
+.split-right-num { border-right: 1px solid #30363d; }
+
+.empty-cell { background: #161b22; }
+
+/* Binary file notice */
+.binary-notice {
+  padding: 16px;
+  color: #8b949e;
+  text-align: center;
+  font-style: italic;
+}
+
+/* Comment form */
+.comment-form-row td {
+  background: #161b22;
+  padding: 8px 16px;
+  border-top: 1px solid #30363d;
+  border-bottom: 1px solid #30363d;
+}
+
+.comment-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.comment-form textarea {
+  width: 100%;
+  min-height: 80px;
+  padding: 8px;
+  background: #0d1117;
+  color: #e6edf3;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 13px;
+  resize: vertical;
+}
+
+.comment-form textarea:focus { outline: 1px solid #1f6feb; border-color: #1f6feb; }
+
+.comment-form-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.btn {
+  padding: 5px 16px;
+  border-radius: 6px;
+  border: 1px solid #30363d;
+  font-size: 13px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.btn-primary {
+  background: #238636;
+  color: #fff;
+  border-color: rgba(240, 246, 252, 0.1);
+}
+.btn-primary:hover { background: #2ea043; }
+
+.btn-cancel {
+  background: #21262d;
+  color: #e6edf3;
+}
+.btn-cancel:hover { background: #30363d; }
+
+.btn-danger {
+  background: transparent;
+  color: #f85149;
+  border: none;
+  padding: 2px 8px;
+  font-size: 12px;
+}
+.btn-danger:hover { background: rgba(248, 81, 73, 0.1); }
+
+.btn-edit {
+  background: transparent;
+  color: #8b949e;
+  border: none;
+  padding: 2px 8px;
+  font-size: 12px;
+}
+.btn-edit:hover { background: rgba(139, 148, 158, 0.15); color: #e6edf3; }
+
+.comment-actions { display: flex; gap: 4px; align-items: center; }
+
+/* Comment display */
+.comment-row td {
+  background: #161b22;
+  padding: 8px 16px;
+  border-top: 1px solid #30363d;
+}
+
+.comment-box {
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  overflow: hidden;
+  margin: 4px 0;
+}
+
+.comment-header {
+  background: #1c2128;
+  padding: 6px 12px;
+  font-size: 12px;
+  color: #8b949e;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.comment-body {
+  padding: 8px 12px;
+  font-size: 13px;
+  white-space: pre-wrap;
+}
+
+.comment-range {
+  font-size: 11px;
+  color: #6e7681;
+  margin-left: 8px;
+}
+
+/* Syntax highlighting — keep diff backgrounds transparent */
+.line-content .hljs { background: transparent; padding: 0; }
+.split-left .hljs, .split-right .hljs { background: transparent; padding: 0; }
+
+/* Loading / empty states */
+.loading {
+  text-align: center;
+  padding: 48px;
+  color: #8b949e;
+  font-size: 16px;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 48px;
+  color: #8b949e;
+}
+
+.btn-reload {
+  padding: 5px 14px;
+  background: #21262d;
+  color: #e6edf3;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn-reload:hover { background: #30363d; }
+
+/* Highlight matching text in search */
+.file-search-item mark {
+  background: rgba(210, 153, 34, 0.4);
+  color: inherit;
+  border-radius: 2px;
+}
+</style>
+</head>
+<body>
+<h1><a href="/" style="color:inherit;text-decoration:none;">Differ</a> / {{ repo_slug }}</h1>
+
+<div class="toolbar">
+  <div class="view-toggle">
+    <button id="btn-unified" onclick="setView('unified')">Unified</button>
+    <button id="btn-split" class="active" onclick="setView('split')">Split</button>
+  </div>
+  <div class="file-search-panel" id="file-search-panel">
+    <span class="file-search-icon">&#x1F50D;</span>
+    <input type="text" class="file-search-input" id="file-search-input"
+           placeholder="Search files..." autocomplete="off">
+    <div class="file-search-dropdown" id="file-search-dropdown"></div>
+  </div>
+  <span class="file-count" id="file-count"></span>
+  <button class="btn-reload" onclick="reloadDiff()" title="Reload diff and clear comments">Reload</button>
+</div>
+
+<div id="app"><div class="loading">Loading diff...</div></div>
+
+<script>
+const appEl = document.getElementById('app');
+const repoSlug = {{ repo_slug | tojson }};
+let diffData = [];
+let commentsData = [];
+let viewMode = 'split'; // 'unified' | 'split'
+
+// --- File search state ---
+const searchInput = document.getElementById('file-search-input');
+const searchDropdown = document.getElementById('file-search-dropdown');
+const fileCountEl = document.getElementById('file-count');
+let searchActiveIdx = -1;
+
+async function reloadDiff() {
+  await fetch(`/${repoSlug}/api/comments`, { method: 'DELETE' });
+  await fetchDiff();
+  commentsData = [];
+  render();
+}
+
+async function fetchDiff() {
+  const res = await fetch(`/${repoSlug}/api/diff`);
+  diffData = await res.json();
+}
+
+async function fetchComments() {
+  const res = await fetch(`/${repoSlug}/api/comments`);
+  commentsData = await res.json();
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+const EXT_TO_LANG = {
+  js: 'javascript', mjs: 'javascript', cjs: 'javascript',
+  ts: 'typescript', tsx: 'typescript', jsx: 'javascript',
+  py: 'python', pyi: 'python',
+  rb: 'ruby', rs: 'rust', go: 'go', java: 'java',
+  kt: 'kotlin', kts: 'kotlin', scala: 'scala',
+  c: 'c', h: 'c', cpp: 'cpp', cc: 'cpp', cxx: 'cpp', hpp: 'cpp',
+  cs: 'csharp', swift: 'swift', m: 'objectivec',
+  sh: 'bash', bash: 'bash', zsh: 'bash', fish: 'bash',
+  html: 'xml', htm: 'xml', xml: 'xml', svg: 'xml',
+  css: 'css', scss: 'scss', less: 'less', sass: 'scss',
+  json: 'json', yaml: 'yaml', yml: 'yaml', toml: 'ini',
+  md: 'markdown', sql: 'sql', graphql: 'graphql', gql: 'graphql',
+  dockerfile: 'dockerfile', tf: 'hcl',
+  r: 'r', lua: 'lua', pl: 'perl', pm: 'perl',
+  php: 'php', ex: 'elixir', exs: 'elixir', erl: 'erlang',
+  hs: 'haskell', ml: 'ocaml', clj: 'clojure',
+  dart: 'dart', zig: 'zig', nim: 'nim', v: 'v',
+  proto: 'protobuf', cmake: 'cmake', make: 'makefile',
+  makefile: 'makefile', groovy: 'groovy', gradle: 'groovy',
+};
+
+function langFromFilename(name) {
+  const lower = name.toLowerCase();
+  const base = lower.split('/').pop();
+  if (base === 'dockerfile' || base.startsWith('dockerfile.')) return 'dockerfile';
+  if (base === 'makefile' || base === 'gnumakefile') return 'makefile';
+  if (base === 'cmakelists.txt') return 'cmake';
+  const ext = base.includes('.') ? base.split('.').pop() : '';
+  return EXT_TO_LANG[ext] || null;
+}
+
+function highlightLine(code, lang) {
+  if (!lang) return null;
+  try {
+    return hljs.highlight(code, { language: lang, ignoreIllegals: true }).value;
+  } catch { return null; }
+}
+
+function highlightContent(text, lang) {
+  const hl = highlightLine(text, lang);
+  return hl !== null ? hl : escapeHtml(text);
+}
+
+// =====================
+// View toggle
+// =====================
+function setView(mode) {
+  viewMode = mode;
+  document.getElementById('btn-unified').classList.toggle('active', mode === 'unified');
+  document.getElementById('btn-split').classList.toggle('active', mode === 'split');
+  render();
+}
+
+// =====================
+// File search
+// =====================
+function getFileNames() {
+  return diffData.map(f => f.old_name === f.new_name ? f.new_name : `${f.old_name} \u2192 ${f.new_name}`);
+}
+
+function highlightMatch(text, query) {
+  if (!query) return escapeHtml(text);
+  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`(${escaped})`, 'gi');
+  return escapeHtml(text).replace(re, '<mark>$1</mark>');
+}
+
+function renderFileDropdown(query) {
+  const names = getFileNames();
+  const q = (query || '').toLowerCase();
+  const filtered = names.map((name, idx) => ({ name, idx }))
+    .filter(item => !q || item.name.toLowerCase().includes(q));
+
+  if (filtered.length === 0 || (filtered.length === names.length && !q)) {
+    if (!q) { searchDropdown.classList.remove('open'); return; }
+  }
+
+  searchActiveIdx = -1;
+  searchDropdown.innerHTML = '';
+
+  for (const item of filtered) {
+    const el = document.createElement('div');
+    el.className = 'file-search-item';
+    el.dataset.fileIdx = item.idx;
+
+    const lastSlash = item.name.lastIndexOf('/');
+    if (lastSlash >= 0) {
+      el.innerHTML =
+        `<span class="file-dir">${highlightMatch(item.name.substring(0, lastSlash + 1), q)}</span>` +
+        `<span class="file-base">${highlightMatch(item.name.substring(lastSlash + 1), q)}</span>`;
+    } else {
+      el.innerHTML = `<span class="file-base">${highlightMatch(item.name, q)}</span>`;
+    }
+
+    el.addEventListener('click', () => {
+      scrollToFile(item.idx);
+      searchDropdown.classList.remove('open');
+      searchInput.value = '';
+    });
+    searchDropdown.appendChild(el);
+  }
+
+  searchDropdown.classList.add('open');
+}
+
+function scrollToFile(idx) {
+  const cards = appEl.querySelectorAll('.file-card');
+  if (cards[idx]) {
+    cards[idx].scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // Brief highlight
+    cards[idx].style.outline = '2px solid #58a6ff';
+    setTimeout(() => { cards[idx].style.outline = ''; }, 1500);
+  }
+}
+
+searchInput.addEventListener('input', () => renderFileDropdown(searchInput.value));
+searchInput.addEventListener('focus', () => {
+  if (searchInput.value) renderFileDropdown(searchInput.value);
+  else renderFileDropdown('');
+});
+
+searchInput.addEventListener('keydown', (e) => {
+  const items = searchDropdown.querySelectorAll('.file-search-item');
+  if (!searchDropdown.classList.contains('open') || items.length === 0) {
+    if (e.key === 'Escape') { searchInput.blur(); return; }
+    return;
+  }
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    searchActiveIdx = Math.min(searchActiveIdx + 1, items.length - 1);
+    items.forEach((el, i) => el.classList.toggle('active', i === searchActiveIdx));
+    items[searchActiveIdx].scrollIntoView({ block: 'nearest' });
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    searchActiveIdx = Math.max(searchActiveIdx - 1, 0);
+    items.forEach((el, i) => el.classList.toggle('active', i === searchActiveIdx));
+    items[searchActiveIdx].scrollIntoView({ block: 'nearest' });
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (searchActiveIdx >= 0 && searchActiveIdx < items.length) {
+      scrollToFile(parseInt(items[searchActiveIdx].dataset.fileIdx));
+      searchDropdown.classList.remove('open');
+      searchInput.value = '';
+    }
+  } else if (e.key === 'Escape') {
+    searchDropdown.classList.remove('open');
+    searchInput.blur();
+  }
+});
+
+document.addEventListener('click', (e) => {
+  if (!document.getElementById('file-search-panel').contains(e.target)) {
+    searchDropdown.classList.remove('open');
+  }
+});
+
+// =====================
+// Rendering
+// =====================
+function render() {
+  if (diffData.length === 0) {
+    appEl.innerHTML = '<div class="empty-state">No changes detected. Make some changes in the target repo and refresh.</div>';
+    fileCountEl.textContent = '';
+    return;
+  }
+
+  fileCountEl.textContent = `${diffData.length} file${diffData.length !== 1 ? 's' : ''} changed`;
+  appEl.innerHTML = '';
+
+  for (const file of diffData) {
+    const card = document.createElement('div');
+    card.className = 'file-card';
+
+    const header = document.createElement('div');
+    header.className = 'file-header';
+    header.textContent = file.old_name === file.new_name
+      ? file.new_name
+      : `${file.old_name} \u2192 ${file.new_name}`;
+    card.appendChild(header);
+
+    if (file.binary) {
+      const notice = document.createElement('div');
+      notice.className = 'binary-notice';
+      notice.textContent = 'Binary file not shown.';
+      card.appendChild(notice);
+      appEl.appendChild(card);
+      continue;
+    }
+
+    if (viewMode === 'unified') {
+      card.appendChild(renderUnifiedTable(file));
+    } else {
+      card.appendChild(renderSplitTable(file));
+    }
+
+    appEl.appendChild(card);
+  }
+
+  renderComments();
+}
+
+// =====================
+// Unified view
+// =====================
+function renderUnifiedTable(file) {
+  const table = document.createElement('table');
+  table.className = 'diff-table';
+  const lang = langFromFilename(file.new_name);
+
+  for (const hunk of file.hunks) {
+    const hunkRow = document.createElement('tr');
+    hunkRow.className = 'diff-row hunk-header';
+    hunkRow.innerHTML = `<td class="line-num"></td><td class="line-num"></td><td class="line-content">${escapeHtml(hunk.header)}</td>`;
+    table.appendChild(hunkRow);
+
+    for (const line of hunk.lines) {
+      if (line.type === 'no_newline') {
+        const nlRow = document.createElement('tr');
+        nlRow.className = 'diff-row no_newline';
+        nlRow.innerHTML = `<td class="line-num"></td><td class="line-num"></td><td class="line-content">${escapeHtml(line.content)}</td>`;
+        table.appendChild(nlRow);
+        continue;
+      }
+
+      const row = document.createElement('tr');
+      row.className = `diff-row ${line.type}`;
+
+      const side = line.type === 'deletion' ? 'left' : 'right';
+      const lineNum = line.type === 'deletion' ? line.old_line : (line.new_line || line.old_line);
+
+      row.dataset.file = file.new_name;
+      row.dataset.side = side;
+      row.dataset.line = lineNum;
+
+      const oldNumTd = document.createElement('td');
+      oldNumTd.className = 'line-num';
+      oldNumTd.textContent = line.old_line != null ? line.old_line : '';
+
+      const newNumTd = document.createElement('td');
+      newNumTd.className = 'line-num';
+      newNumTd.textContent = line.new_line != null ? line.new_line : '';
+
+      // Line number click for selection
+      const selSide = side;
+      const selLine = lineNum;
+      if (line.type === 'deletion') {
+        oldNumTd.addEventListener('click', (e) => handleLineNumClick(e, file.new_name, selSide, selLine, row));
+      } else {
+        newNumTd.addEventListener('click', (e) => handleLineNumClick(e, file.new_name, selSide, selLine, row));
+      }
+
+      const gutterBtn = document.createElement('button');
+      gutterBtn.className = 'gutter-btn';
+      gutterBtn.textContent = '+';
+      gutterBtn.addEventListener('click', (e) => {
+        handleGutterClick(e, file.new_name, side, lineNum, row);
+      });
+
+      if (line.type === 'deletion') {
+        oldNumTd.appendChild(gutterBtn);
+      } else {
+        newNumTd.appendChild(gutterBtn);
+      }
+
+      const contentTd = document.createElement('td');
+      contentTd.className = 'line-content';
+      contentTd.innerHTML = highlightContent(line.content, lang);
+
+      row.appendChild(oldNumTd);
+      row.appendChild(newNumTd);
+      row.appendChild(contentTd);
+      table.appendChild(row);
+    }
+  }
+
+  return table;
+}
+
+// =====================
+// Split view
+// =====================
+function pairHunkLines(lines) {
+  // Group consecutive deletions and additions into paired rows, context on both sides
+  const result = []; // each: {type, left, right}  where left/right = line object or null
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    if (line.type === 'context') {
+      result.push({ type: 'context', left: line, right: line });
+      i++;
+    } else if (line.type === 'no_newline') {
+      result.push({ type: 'no_newline', left: line, right: null });
+      i++;
+    } else if (line.type === 'deletion') {
+      // Collect consecutive deletions
+      const dels = [];
+      while (i < lines.length && lines[i].type === 'deletion') {
+        dels.push(lines[i]);
+        i++;
+      }
+      // Collect consecutive additions that follow
+      const adds = [];
+      while (i < lines.length && lines[i].type === 'addition') {
+        adds.push(lines[i]);
+        i++;
+      }
+      // Pair them
+      const maxLen = Math.max(dels.length, adds.length);
+      for (let j = 0; j < maxLen; j++) {
+        const d = j < dels.length ? dels[j] : null;
+        const a = j < adds.length ? adds[j] : null;
+        let type = 'both';
+        if (d && !a) type = 'deletion';
+        else if (!d && a) type = 'addition';
+        result.push({ type, left: d, right: a });
+      }
+    } else if (line.type === 'addition') {
+      // Additions not preceded by deletions
+      result.push({ type: 'addition', left: null, right: line });
+      i++;
+    } else {
+      i++;
+    }
+  }
+
+  return result;
+}
+
+function renderSplitTable(file) {
+  const table = document.createElement('table');
+  table.className = 'split-table';
+  const lang = langFromFilename(file.new_name);
+
+  for (const hunk of file.hunks) {
+    // Hunk header spans full width
+    const hunkRow = document.createElement('tr');
+    hunkRow.className = 'split-row hunk-header';
+    hunkRow.innerHTML =
+      `<td class="line-num split-left-num"></td><td colspan="1">${escapeHtml(hunk.header)}</td>` +
+      `<td class="split-divider"></td>` +
+      `<td class="line-num split-right-num"></td><td colspan="1"></td>`;
+    table.appendChild(hunkRow);
+
+    const paired = pairHunkLines(hunk.lines);
+
+    for (const pair of paired) {
+      if (pair.type === 'no_newline') {
+        const nlRow = document.createElement('tr');
+        nlRow.className = 'split-row';
+        nlRow.innerHTML =
+          `<td class="line-num split-left-num"></td><td class="split-left" style="color:#8b949e">${escapeHtml(pair.left.content)}</td>` +
+          `<td class="split-divider"></td>` +
+          `<td class="line-num split-right-num"></td><td class="split-right"></td>`;
+        table.appendChild(nlRow);
+        continue;
+      }
+
+      const row = document.createElement('tr');
+      row.className = `split-row ${pair.type}`;
+
+      // Left side
+      const leftNumTd = document.createElement('td');
+      leftNumTd.className = 'line-num split-left-num';
+      const leftContentTd = document.createElement('td');
+      leftContentTd.className = pair.left ? 'split-left' : 'split-left empty-cell';
+
+      if (pair.left && pair.type !== 'addition') {
+        const leftLine = pair.left.old_line;
+        leftNumTd.textContent = leftLine != null ? leftLine : '';
+        leftContentTd.innerHTML = highlightContent(pair.left.content, lang);
+
+        // Line number click for selection
+        leftNumTd.addEventListener('click', (e) => handleLineNumClick(e, file.new_name, 'left', leftLine, row));
+
+        // Gutter button on left
+        const leftBtn = document.createElement('button');
+        leftBtn.className = 'gutter-btn';
+        leftBtn.textContent = '+';
+        leftBtn.addEventListener('click', (e) => {
+          handleGutterClick(e, file.new_name, 'left', leftLine, row);
+        });
+        leftNumTd.appendChild(leftBtn);
+      }
+
+      // Divider
+      const divider = document.createElement('td');
+      divider.className = 'split-divider';
+
+      // Right side
+      const rightNumTd = document.createElement('td');
+      rightNumTd.className = 'line-num split-right-num';
+      const rightContentTd = document.createElement('td');
+      rightContentTd.className = pair.right ? 'split-right' : 'split-right empty-cell';
+
+      if (pair.right && pair.type !== 'deletion') {
+        rightNumTd.textContent = pair.right.new_line != null ? pair.right.new_line : '';
+        rightContentTd.innerHTML = highlightContent(pair.right.content, lang);
+      } else if (pair.type === 'context' && pair.right) {
+        rightNumTd.textContent = pair.right.new_line != null ? pair.right.new_line : '';
+        rightContentTd.innerHTML = highlightContent(pair.right.content, lang);
+      }
+
+      // Line number click + gutter button on right (for additions and context)
+      if (pair.right && pair.type !== 'deletion') {
+        const rightLineNum = pair.right.new_line || pair.right.old_line;
+
+        rightNumTd.addEventListener('click', (e) => handleLineNumClick(e, file.new_name, 'right', rightLineNum, row));
+
+        const rightBtn = document.createElement('button');
+        rightBtn.className = 'gutter-btn';
+        rightBtn.textContent = '+';
+        rightBtn.addEventListener('click', (e) => {
+          handleGutterClick(e, file.new_name, 'right', rightLineNum, row);
+        });
+        rightNumTd.appendChild(rightBtn);
+      }
+
+      // Data attributes for comments — store both sides so anchoring works
+      row.dataset.file = file.new_name;
+      if (pair.left && pair.type !== 'addition') {
+        row.dataset.leftLine = pair.left.old_line;
+      }
+      if (pair.right && pair.type !== 'deletion') {
+        row.dataset.rightLine = pair.right.new_line || pair.right.old_line;
+      }
+
+      row.appendChild(leftNumTd);
+      row.appendChild(leftContentTd);
+      row.appendChild(divider);
+      row.appendChild(rightNumTd);
+      row.appendChild(rightContentTd);
+      table.appendChild(row);
+    }
+  }
+
+  return table;
+}
+
+// =====================
+// Comments (works in both views)
+// =====================
+// Selection state: tracks selected line range
+let selection = null; // {file, side, startLine, endLine, tableEl}
+
+function getRowLine(row, side) {
+  if (viewMode === 'unified') {
+    return row.dataset.side === side ? parseInt(row.dataset.line) : NaN;
+  }
+  const attr = side === 'left' ? 'leftLine' : 'rightLine';
+  const val = row.dataset[attr];
+  return val != null ? parseInt(val) : NaN;
+}
+
+function highlightRange(tableEl, file, side, startLine, endLine) {
+  clearRangeHighlights();
+  tableEl.querySelectorAll('.diff-row, .split-row').forEach(r => {
+    if (r.dataset.file !== file) return;
+    const rl = getRowLine(r, side);
+    if (!isNaN(rl) && rl >= startLine && rl <= endLine) {
+      r.classList.add('range-selected');
+    }
+  });
+}
+
+function handleLineNumClick(event, file, side, line, rowEl) {
+  event.stopPropagation();
+  const tableEl = rowEl.closest('table');
+
+  // Close any open comment form
+  const existing = document.getElementById('active-comment-form');
+  if (existing) existing.remove();
+
+  if (event.shiftKey && selection && selection.file === file && selection.side === side) {
+    // Extend selection to range
+    const startLine = Math.min(selection.startLine, line);
+    const endLine = Math.max(selection.startLine, line);
+    selection = { file, side, startLine, endLine, tableEl };
+    highlightRange(tableEl, file, side, startLine, endLine);
+  } else {
+    // Start new selection
+    clearRangeHighlights();
+    selection = { file, side, startLine: line, endLine: line, tableEl };
+    rowEl.classList.add('range-selected');
+  }
+}
+
+function handleGutterClick(event, file, side, line, rowEl) {
+  event.stopPropagation();
+
+  // If there's a selection on the same file/side, open form for the selection range
+  if (selection && selection.file === file && selection.side === side) {
+    const lastRow = findLastRowInRange(selection.tableEl, file, side, selection.endLine);
+    openCommentForm(file, side, selection.startLine, selection.endLine, lastRow || rowEl);
+  } else {
+    // No selection — comment on this single line
+    clearRangeHighlights();
+    selection = { file, side, startLine: line, endLine: line, tableEl: rowEl.closest('table') };
+    rowEl.classList.add('range-selected');
+    openCommentForm(file, side, line, line, rowEl);
+  }
+}
+
+function findLastRowInRange(tableEl, file, side, endLine) {
+  let found = null;
+  tableEl.querySelectorAll('.diff-row, .split-row').forEach(r => {
+    if (r.dataset.file !== file) return;
+    const rl = getRowLine(r, side);
+    if (rl === endLine) found = r;
+  });
+  return found;
+}
+
+function clearRangeHighlights() {
+  document.querySelectorAll('.range-selected').forEach(el => el.classList.remove('range-selected'));
+}
+
+function buildCommentFormHtml(file, side, startLine, endLine) {
+  const rangeLabel = startLine === endLine
+    ? `Line ${startLine}`
+    : `Lines ${startLine}\u2013${endLine}`;
+  return `
+    <div class="comment-form">
+      <div style="font-size:12px;color:#8b949e;">${escapeHtml(file)} \u00b7 ${side} \u00b7 ${rangeLabel}</div>
+      <textarea id="comment-textarea" placeholder="Write a comment\u2026" autofocus></textarea>
+      <div class="comment-form-actions">
+        <button class="btn btn-cancel" onclick="closeCommentForm()">Cancel</button>
+        <button class="btn btn-primary" onclick="submitComment('${escapeHtml(file)}','${side}',${startLine},${endLine})">Comment</button>
+      </div>
+    </div>
+  `;
+}
+
+function openCommentForm(file, side, startLine, endLine, anchorRow) {
+  // Remove existing form without clearing selection
+  const existing = document.getElementById('active-comment-form');
+  if (existing) existing.remove();
+
+  const formRow = document.createElement('tr');
+  formRow.className = 'comment-form-row';
+  formRow.id = 'active-comment-form';
+
+  const formHtml = buildCommentFormHtml(file, side, startLine, endLine);
+
+  if (viewMode === 'split') {
+    buildSplitCommentRow(formRow, side, formHtml);
+  } else {
+    const td = document.createElement('td');
+    td.colSpan = 3;
+    td.innerHTML = formHtml;
+    formRow.appendChild(td);
+  }
+
+  anchorRow.after(formRow);
+
+  setTimeout(() => {
+    const ta = document.getElementById('comment-textarea');
+    if (ta) ta.focus();
+  }, 0);
+}
+
+function buildSplitCommentRow(row, side, contentHtml) {
+  const leftNum = document.createElement('td');
+  leftNum.className = 'line-num split-left-num';
+  const leftContent = document.createElement('td');
+  leftContent.className = 'split-left';
+  const divider = document.createElement('td');
+  divider.className = 'split-divider';
+  const rightNum = document.createElement('td');
+  rightNum.className = 'line-num split-right-num';
+  const rightContent = document.createElement('td');
+  rightContent.className = 'split-right';
+
+  if (side === 'left') {
+    leftContent.innerHTML = contentHtml;
+    rightContent.classList.add('empty-cell');
+  } else {
+    rightContent.innerHTML = contentHtml;
+    leftContent.classList.add('empty-cell');
+  }
+
+  row.appendChild(leftNum);
+  row.appendChild(leftContent);
+  row.appendChild(divider);
+  row.appendChild(rightNum);
+  row.appendChild(rightContent);
+}
+
+function closeCommentForm() {
+  const existing = document.getElementById('active-comment-form');
+  if (existing) existing.remove();
+  clearRangeHighlights();
+  selection = null;
+}
+
+async function submitComment(file, side, startLine, endLine) {
+  const textarea = document.getElementById('comment-textarea');
+  const body = textarea ? textarea.value.trim() : '';
+  if (!body) return;
+
+  const res = await fetch(`/${repoSlug}/api/comments`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ file, side, start_line: startLine, end_line: endLine, body }),
+  });
+
+  if (res.ok) {
+    closeCommentForm();
+    await fetchComments();
+    renderComments();
+  }
+}
+
+async function deleteComment(id) {
+  const res = await fetch(`/${repoSlug}/api/comments/${id}`, { method: 'DELETE' });
+  if (res.ok) {
+    await fetchComments();
+    renderComments();
+  }
+}
+
+function editComment(id) {
+  const comment = commentsData.find(c => c.id === id);
+  if (!comment) return;
+
+  const bodyEl = document.querySelector(`.comment-box[data-comment-id="${id}"] .comment-body`);
+  if (!bodyEl) return;
+
+  bodyEl.innerHTML = `
+    <textarea class="comment-edit-textarea" style="width:100%;min-height:60px;padding:8px;background:#0d1117;color:#e6edf3;border:1px solid #30363d;border-radius:6px;font-family:inherit;font-size:13px;resize:vertical;">${escapeHtml(comment.body)}</textarea>
+    <div class="comment-form-actions" style="margin-top:8px;">
+      <button class="btn btn-cancel" onclick="cancelEditComment('${id}')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveEditComment('${id}')">Save</button>
+    </div>
+  `;
+
+  const ta = bodyEl.querySelector('textarea');
+  if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+}
+
+function cancelEditComment(id) {
+  const comment = commentsData.find(c => c.id === id);
+  if (!comment) return;
+  const bodyEl = document.querySelector(`.comment-box[data-comment-id="${id}"] .comment-body`);
+  if (bodyEl) bodyEl.textContent = comment.body;
+}
+
+async function saveEditComment(id) {
+  const bodyEl = document.querySelector(`.comment-box[data-comment-id="${id}"] .comment-body`);
+  if (!bodyEl) return;
+  const ta = bodyEl.querySelector('textarea');
+  const newBody = ta ? ta.value.trim() : '';
+  if (!newBody) return;
+
+  const res = await fetch(`/${repoSlug}/api/comments/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ body: newBody }),
+  });
+
+  if (res.ok) {
+    await fetchComments();
+    renderComments();
+  }
+}
+
+function buildCommentBoxHtml(comment) {
+  const rangeLabel = comment.start_line === comment.end_line
+    ? `line ${comment.start_line}`
+    : `lines ${comment.start_line}\u2013${comment.end_line}`;
+
+  return `
+    <div class="comment-box" data-comment-id="${comment.id}">
+      <div class="comment-header">
+        <span><strong>${escapeHtml(comment.author)}</strong> commented on ${comment.side} ${rangeLabel}
+          <span class="comment-range">${new Date(comment.created_at).toLocaleString()}</span>
+        </span>
+        <div class="comment-actions">
+          <button class="btn btn-edit" onclick="editComment('${comment.id}')">Edit</button>
+          <button class="btn btn-danger" onclick="deleteComment('${comment.id}')">Delete</button>
+        </div>
+      </div>
+      <div class="comment-body">${escapeHtml(comment.body)}</div>
+    </div>
+  `;
+}
+
+function findAnchorRow(comment) {
+  if (viewMode === 'unified') {
+    const rows = document.querySelectorAll(
+      `.diff-row[data-file="${CSS.escape(comment.file)}"][data-side="${comment.side}"]`
+    );
+
+    let anchorRow = null;
+    for (const row of rows) {
+      if (parseInt(row.dataset.line) === comment.end_line) {
+        anchorRow = row;
+        break;
+      }
+    }
+
+    if (!anchorRow) {
+      let closest = null;
+      let closestDist = Infinity;
+      for (const row of rows) {
+        const dist = Math.abs(parseInt(row.dataset.line) - comment.end_line);
+        if (dist < closestDist) {
+          closestDist = dist;
+          closest = row;
+        }
+      }
+      anchorRow = closest;
+    }
+
+    return anchorRow;
+  }
+
+  // Split view: use data-left-line / data-right-line
+  const lineAttr = comment.side === 'left' ? 'leftLine' : 'rightLine';
+  const rows = document.querySelectorAll(
+    `.split-row[data-file="${CSS.escape(comment.file)}"]`
+  );
+
+  let anchorRow = null;
+  for (const row of rows) {
+    const val = row.dataset[lineAttr];
+    if (val != null && parseInt(val) === comment.end_line) {
+      anchorRow = row;
+      break;
+    }
+  }
+
+  if (!anchorRow) {
+    let closest = null;
+    let closestDist = Infinity;
+    for (const row of rows) {
+      const val = row.dataset[lineAttr];
+      if (val == null) continue;
+      const dist = Math.abs(parseInt(val) - comment.end_line);
+      if (dist < closestDist) {
+        closestDist = dist;
+        closest = row;
+      }
+    }
+    anchorRow = closest;
+  }
+
+  return anchorRow;
+}
+
+function renderComments() {
+  document.querySelectorAll('.comment-row').forEach(el => el.remove());
+
+  for (const comment of commentsData) {
+    const anchorRow = findAnchorRow(comment);
+    if (!anchorRow) continue;
+
+    const commentRow = document.createElement('tr');
+    commentRow.className = 'comment-row';
+    const boxHtml = buildCommentBoxHtml(comment);
+
+    if (viewMode === 'split') {
+      buildSplitCommentRow(commentRow, comment.side, boxHtml);
+    } else {
+      const td = document.createElement('td');
+      td.colSpan = 3;
+      td.innerHTML = boxHtml;
+      commentRow.appendChild(td);
+    }
+
+    let insertAfter = anchorRow;
+    while (insertAfter.nextElementSibling && insertAfter.nextElementSibling.classList.contains('comment-row')) {
+      insertAfter = insertAfter.nextElementSibling;
+    }
+    insertAfter.after(commentRow);
+  }
+}
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    closeCommentForm();
+    searchDropdown.classList.remove('open');
+  }
+  // Cmd/Ctrl+P to focus file search
+  if ((e.metaKey || e.ctrlKey) && e.key === 'p') {
+    e.preventDefault();
+    searchInput.focus();
+    renderFileDropdown('');
+  }
+});
+
+// Init
+(async () => {
+  await Promise.all([fetchDiff(), fetchComments()]);
+  render();
+})();
+</script>
+</body>
+</html>

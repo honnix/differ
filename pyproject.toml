@@ -1,0 +1,20 @@
+[project]
+name = "differ"
+version = "0.1.0"
+description = "GitHub-style PR diff viewer with inline comments"
+requires-python = ">=3.11"
+dependencies = ["flask>=3.0"]
+
+[project.scripts]
+differ = "differ.app:main"
+
+[tool.ruff]
+line-length = 99
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
