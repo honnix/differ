@@ -374,7 +374,7 @@ def main():
 
     mcp_thread = threading.Thread(target=run_mcp, kwargs={"port": 5002}, daemon=True)
     mcp_thread.start()
-    print("MCP server on http://localhost:5002/sse")
+    print("MCP server on http://localhost:5002/mcp")
 
     print("Running on http://localhost:5001")
     app.run(host="127.0.0.1", port=5001, debug=True)

@@ -163,8 +163,8 @@ def clear_comments(repo: str) -> str:
 
 
 def run_mcp(port: int = 5002) -> None:
-    """Start the MCP server with SSE transport."""
-    mcp.run(transport="sse", port=port)
+    """Start the MCP server with streamable HTTP transport."""
+    mcp.run(transport="streamable-http", port=port)
 
 
 def main() -> None:

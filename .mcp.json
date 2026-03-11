@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "differ": {
-      "url": "http://localhost:5002/sse"
+      "url": "http://localhost:5002/mcp"
     }
   }
 }
