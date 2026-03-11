@@ -63,7 +63,7 @@ Slug must be alphanumeric + hyphens. Path must be an existing directory on disk.
 
 `uv run differ` starts both the web UI (port 5001) and an MCP server (port 5002) in the same process, sharing in-memory state. Claude Code auto-connects via `.mcp.json` → `http://localhost:5002/mcp`.
 
-Tools: `list_repos`, `add_repo`, `update_repo`, `remove_repo`, `get_diff`, `list_comments`, `create_comment`, `update_comment`, `delete_comment`, `clear_comments`.
+Read-only tools: `list_repos`, `get_diff`, `list_comments`.
 
 ## Development
 
