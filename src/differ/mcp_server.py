@@ -10,9 +10,12 @@ from mcp.server.fastmcp import FastMCP
 
 from differ import app as differ_app
 
+MCP_PORT = 5002
+
 mcp = FastMCP(
     "differ",
     instructions="Read-only access to a local Differ instance (diff viewer with inline comments).",
+    port=MCP_PORT,
 )
 
 
@@ -48,9 +51,9 @@ def list_comments(repo: str, file: str | None = None) -> str:
     return _fmt(list(repo_comments.values()))
 
 
-def run_mcp(port: int = 5002) -> None:
+def run_mcp() -> None:
     """Start the MCP server with streamable HTTP transport."""
-    mcp.run(transport="streamable-http", port=port)
+    mcp.run(transport="streamable-http")
 
 
 def main() -> None:

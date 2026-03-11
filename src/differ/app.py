@@ -372,7 +372,7 @@ def main():
     # Start MCP server in background thread
     from differ.mcp_server import run_mcp
 
-    mcp_thread = threading.Thread(target=run_mcp, kwargs={"port": 5002}, daemon=True)
+    mcp_thread = threading.Thread(target=run_mcp, daemon=True)
     mcp_thread.start()
     print("MCP server on http://localhost:5002/mcp")
 
