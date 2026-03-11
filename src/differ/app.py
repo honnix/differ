@@ -5,8 +5,9 @@ import sys
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
-from flask import Flask, abort, jsonify, render_template, request
+from flask import Flask, Response, abort, jsonify, render_template, request
 
 SLUG_RE = re.compile(r"^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?$")
 
@@ -15,15 +16,15 @@ app = Flask(__name__)
 REPOS: dict[str, str] = {}
 
 # Per-repo comment store: {repo_slug: {comment_id: comment_dict}}
-comments: dict[str, dict[str, dict]] = {}
+comments: dict[str, dict[str, dict[str, Any]]] = {}
 
 
-def parse_diff(diff_text: str) -> list[dict]:
+def parse_diff(diff_text: str) -> list[dict[str, Any]]:
     """Parse unified diff text into structured data."""
     if not diff_text.strip():
         return []
 
-    files = []
+    files: list[dict[str, Any]] = []
     # Split on file boundaries
     chunks = re.split(r"^(diff --git .+)$", diff_text, flags=re.MULTILINE)
 
@@ -197,17 +198,17 @@ def get_repo_path(repo: str) -> str:
 
 
 @app.get("/")
-def repos_index():
+def repos_index() -> str:
     return render_template("repos.html", repos=REPOS)
 
 
 @app.get("/api/repos")
-def api_repos():
+def api_repos() -> Response:
     return jsonify([{"slug": slug, "path": path} for slug, path in REPOS.items()])
 
 
 @app.post("/api/repos")
-def add_repo():
+def add_repo() -> tuple[Response, int] | Response:
     data = request.get_json()
     if not data:
         return jsonify({"error": "Request body required"}), 400
@@ -227,7 +228,7 @@ def add_repo():
 
 
 @app.put("/api/repos/<slug>")
-def update_repo(slug):
+def update_repo(slug: str) -> tuple[Response, int] | Response:
     if slug not in REPOS:
         return jsonify({"error": f"Repo '{slug}' not found"}), 404
 
@@ -244,7 +245,7 @@ def update_repo(slug):
 
 
 @app.delete("/api/repos/<slug>")
-def delete_repo(slug):
+def delete_repo(slug: str) -> tuple[Response, int] | tuple[str, int]:
     if slug not in REPOS:
         return jsonify({"error": f"Repo '{slug}' not found"}), 404
 
@@ -254,13 +255,13 @@ def delete_repo(slug):
 
 
 @app.get("/<repo>/")
-def index(repo):
+def index(repo: str) -> str:
     get_repo_path(repo)  # validate slug
     return render_template("index.html", repo_slug=repo)
 
 
 @app.get("/<repo>/api/diff")
-def api_diff(repo):
+def api_diff(repo: str) -> Response:
     path = get_repo_path(repo)
     diff_text = get_diff(path)
     parsed = parse_diff(diff_text)
@@ -268,7 +269,7 @@ def api_diff(repo):
 
 
 @app.get("/<repo>/api/comments")
-def list_comments(repo):
+def list_comments(repo: str) -> Response:
     get_repo_path(repo)  # validate slug
     repo_comments = comments.get(repo, {})
     file_filter = request.args.get("file")
@@ -279,14 +280,14 @@ def list_comments(repo):
 
 
 @app.delete("/<repo>/api/comments")
-def clear_comments(repo):
+def clear_comments(repo: str) -> tuple[str, int]:
     get_repo_path(repo)  # validate slug
     comments.pop(repo, None)
     return "", 204
 
 
 @app.post("/<repo>/api/comments")
-def create_comment(repo):
+def create_comment(repo: str) -> tuple[Response, int]:
     get_repo_path(repo)  # validate slug
     data = request.get_json()
     if not data:
@@ -313,7 +314,7 @@ def create_comment(repo):
 
 
 @app.get("/<repo>/api/comments/<comment_id>")
-def get_comment(repo, comment_id):
+def get_comment(repo: str, comment_id: str) -> tuple[Response, int] | Response:
     get_repo_path(repo)  # validate slug
     comment = comments.get(repo, {}).get(comment_id)
     if not comment:
@@ -322,7 +323,7 @@ def get_comment(repo, comment_id):
 
 
 @app.put("/<repo>/api/comments/<comment_id>")
-def update_comment(repo, comment_id):
+def update_comment(repo: str, comment_id: str) -> tuple[Response, int] | Response:
     get_repo_path(repo)  # validate slug
     comment = comments.get(repo, {}).get(comment_id)
     if not comment:
@@ -337,7 +338,7 @@ def update_comment(repo, comment_id):
 
 
 @app.delete("/<repo>/api/comments/<comment_id>")
-def delete_comment(repo, comment_id):
+def delete_comment(repo: str, comment_id: str) -> tuple[Response, int] | tuple[str, int]:
     get_repo_path(repo)  # validate slug
     repo_comments = comments.get(repo, {})
     if comment_id not in repo_comments:
@@ -347,14 +348,14 @@ def delete_comment(repo, comment_id):
 
 
 @app.after_request
-def add_cors_headers(response):
+def add_cors_headers(response: Response) -> Response:
     response.headers["Access-Control-Allow-Origin"] = "*"
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type"
     return response
 
 
-def main():
+def main() -> None:
     global REPOS
     if len(sys.argv) > 1:
         path = str(Path(sys.argv[1]).resolve())

@@ -60,9 +60,8 @@ Slug must be alphanumeric + hyphens. Path must be an existing directory on disk.
 ## Development
 
 ```bash
-# Lint and format
-ruff check src/
-ruff format --check src/
+# Run all checks (lint + typecheck)
+uv run --with tox-uv tox
 
 # Run with auto-reload
 uv run differ
