@@ -288,7 +288,57 @@ def api_diff(repo: str) -> Response:
     path = get_repo_path(repo)
     diff_text = get_diff(path)
     parsed = parse_diff(diff_text)
+
+    # Augment each file with total line count from the working tree
+    for file_entry in parsed:
+        if file_entry.get("binary"):
+            continue
+        file_path = os.path.join(path, file_entry["new_name"])
+        try:
+            with open(file_path) as f:
+                file_entry["new_total_lines"] = sum(1 for _ in f)
+        except OSError:
+            file_entry["new_total_lines"] = 0
+
     return jsonify(parsed)
+
+
+@app.get("/<repo>/api/file-lines")
+def api_file_lines(repo: str) -> tuple[Response, int] | Response:
+    repo_path = get_repo_path(repo)
+
+    file_param = request.args.get("path", "")
+    start = request.args.get("start", type=int)
+    end = request.args.get("end", type=int)
+
+    if not file_param or start is None or end is None:
+        return jsonify({"error": "path, start, and end params required"}), 400
+    if ".." in file_param.split("/"):
+        return jsonify({"error": "Invalid path"}), 400
+    if start < 1 or end < start:
+        return jsonify({"error": "Invalid line range"}), 400
+
+    full_path = os.path.join(repo_path, file_param)
+    try:
+        with open(full_path) as f:
+            all_lines = f.readlines()
+    except OSError:
+        return jsonify({"error": "File not found"}), 404
+
+    total_lines = len(all_lines)
+    # Clamp range
+    actual_start = max(1, start)
+    actual_end = min(end, total_lines)
+    selected = [line.rstrip("\n\r") for line in all_lines[actual_start - 1 : actual_end]]
+
+    return jsonify(
+        {
+            "lines": selected,
+            "start": actual_start,
+            "end": actual_end,
+            "total_lines": total_lines,
+        }
+    )
 
 
 @app.get("/<repo>/api/comments")
