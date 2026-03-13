@@ -184,6 +184,65 @@ h1 {
 .viewed-label input { cursor: pointer; }
 .viewed-label:hover { color: #e6edf3; }
 
+.file-comment-btn {
+  background: none;
+  border: 1px solid #30363d;
+  border-radius: 4px;
+  color: #8b949e;
+  cursor: pointer;
+  padding: 2px 5px;
+  font-size: 13px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+}
+.file-comment-btn:hover { color: #e6edf3; border-color: #8b949e; }
+
+.file-comment-container {
+  background: #161b22;
+  border-bottom: 1px solid #30363d;
+  padding: 8px 16px;
+}
+
+.file-comment-box {
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+}
+
+.file-comment-box .comment-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #8b949e;
+  margin-bottom: 4px;
+}
+
+.file-comment-box .comment-body {
+  font-size: 13px;
+  white-space: pre-wrap;
+}
+
+.file-comment-box .comment-actions {
+  margin-top: 4px;
+  display: flex;
+  gap: 8px;
+}
+
+.file-comment-box .comment-actions button {
+  background: none;
+  border: none;
+  color: #8b949e;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0;
+}
+
+.file-comment-box .comment-actions button:hover { color: #e6edf3; }
+
 .file-card.viewed { opacity: 0.6; }
 .file-card.viewed .file-header { background: #0d1117; }
 
@@ -693,7 +752,7 @@ h1 {
     <div class="file-search-dropdown" id="file-search-dropdown"></div>
   </div>
   <span class="file-count" id="file-count"></span>
-  <button class="btn-reload" onclick="reloadDiff()" title="Reload diff and clear comments">Reload</button>
+  <button class="btn-reload" onclick="clearAllComments()" title="Clear all comments">Clear comments</button>
   <div class="viewed-progress" id="viewed-progress" style="display:none">
     <div class="viewed-progress-bar"><div class="viewed-progress-fill" id="viewed-progress-fill"></div></div>
     <span id="viewed-count-text"></span>
@@ -840,11 +899,11 @@ function updateViewedProgress() {
   textEl.textContent = `${viewed} / ${total} files viewed`;
 }
 
-async function reloadDiff() {
+async function clearAllComments() {
+  if (!commentsData.length) return;
+  if (!confirm('Clear all comments?')) return;
   await fetch(`/${repoSlug}/api/comments`, { method: 'DELETE' });
-  await fetchDiff();
   commentsData = [];
-  viewedFiles.clear();
   render();
 }
 
@@ -1065,6 +1124,7 @@ function render() {
       setTimeout(() => { copyBtn.classList.remove('copied'); copyBtn.innerHTML = '\u2398'; }, 1500);
     });
     header.appendChild(copyBtn);
+
     const viewedLabel = document.createElement('label');
     viewedLabel.className = 'viewed-label';
     viewedLabel.addEventListener('click', (e) => e.stopPropagation());
@@ -1084,6 +1144,16 @@ function render() {
     viewedLabel.appendChild(viewedCb);
     viewedLabel.appendChild(document.createTextNode('Viewed'));
     header.appendChild(viewedLabel);
+
+    const fileCommentBtn = document.createElement('button');
+    fileCommentBtn.className = 'file-comment-btn';
+    fileCommentBtn.title = 'Comment on this file';
+    fileCommentBtn.innerHTML = '\uD83D\uDCAC';
+    fileCommentBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openFileCommentForm(file.new_name, card);
+    });
+    header.appendChild(fileCommentBtn);
 
     header.addEventListener('click', () => card.classList.toggle('collapsed'));
     card.appendChild(header);
@@ -1812,9 +1882,9 @@ function clearRangeHighlights() {
 }
 
 function buildCommentFormHtml(file, side, startLine, endLine) {
-  const rangeLabel = startLine === endLine
-    ? `Line ${startLine}`
-    : `Lines ${startLine}\u2013${endLine}`;
+  const rangeLabel = side === 'file'
+    ? 'file comment'
+    : (startLine === endLine ? `Line ${startLine}` : `Lines ${startLine}\u2013${endLine}`);
   return `
     <div class="comment-form">
       <div style="font-size:12px;color:#8b949e;">${escapeHtml(file)} \u00b7 ${side} \u00b7 ${rangeLabel}</div>
@@ -1887,6 +1957,40 @@ function closeCommentForm() {
   if (existing) existing.remove();
   clearRangeHighlights();
   selection = null;
+}
+
+function openFileCommentForm(fileName, card) {
+  closeCommentForm();
+  const existing = document.getElementById('active-comment-form');
+  if (existing) existing.remove();
+
+  const container = document.createElement('div');
+  container.className = 'file-comment-container';
+  container.id = 'active-comment-form';
+  container.innerHTML = `
+    <div class="comment-form">
+      <div style="font-size:12px;color:#8b949e;">${escapeHtml(fileName)} \u00b7 file comment</div>
+      <textarea id="comment-textarea" placeholder="Write a comment\u2026" autofocus></textarea>
+      <div class="comment-form-actions">
+        <button class="btn btn-cancel" onclick="closeFileCommentForm()">Cancel</button>
+        <button class="btn btn-primary" onclick="submitComment('${escapeHtml(fileName)}','file',0,0)">Comment</button>
+      </div>
+    </div>
+  `;
+
+  const header = card.querySelector('.file-header');
+  header.after(container);
+  // Uncollapse if collapsed
+  card.classList.remove('collapsed');
+  setTimeout(() => {
+    const ta = document.getElementById('comment-textarea');
+    if (ta) ta.focus();
+  }, 0);
+}
+
+function closeFileCommentForm() {
+  const existing = document.getElementById('active-comment-form');
+  if (existing) existing.remove();
 }
 
 async function submitComment(file, side, startLine, endLine) {
@@ -2046,8 +2150,14 @@ function findAnchorRow(comment) {
 
 function renderComments() {
   document.querySelectorAll('.comment-row').forEach(el => el.remove());
+  document.querySelectorAll('.file-comment-container.persisted').forEach(el => el.remove());
 
   for (const comment of commentsData) {
+    if (comment.side === 'file') {
+      renderFileComment(comment);
+      continue;
+    }
+
     const anchorRow = findAnchorRow(comment);
     if (!anchorRow) continue;
 
@@ -2070,6 +2180,76 @@ function renderComments() {
     }
     insertAfter.after(commentRow);
   }
+}
+
+function renderFileComment(comment) {
+  // Find the file card
+  const cards = document.querySelectorAll('.file-card');
+  let targetCard = null;
+  for (const card of cards) {
+    const nameEl = card.querySelector('.file-header-name');
+    if (nameEl && (nameEl.textContent === comment.file || nameEl.textContent.includes(comment.file))) {
+      targetCard = card;
+      break;
+    }
+  }
+  if (!targetCard) return;
+
+  const container = document.createElement('div');
+  container.className = 'file-comment-container persisted';
+  container.innerHTML = `
+    <div class="file-comment-box">
+      <div class="comment-header">
+        <strong>${escapeHtml(comment.author)}</strong>
+        <span>${new Date(comment.created_at).toLocaleString()}</span>
+      </div>
+      <div class="comment-body">${escapeHtml(comment.body)}</div>
+      <div class="comment-actions">
+        <button onclick="editFileComment('${comment.id}', this)">Edit</button>
+        <button onclick="deleteComment('${comment.id}')">Delete</button>
+      </div>
+    </div>
+  `;
+
+  const header = targetCard.querySelector('.file-header');
+  header.after(container);
+}
+
+function editFileComment(id, btn) {
+  const comment = commentsData.find(c => c.id === id);
+  if (!comment) return;
+  const box = btn.closest('.file-comment-box');
+  const bodyEl = box.querySelector('.comment-body');
+  const actionsEl = box.querySelector('.comment-actions');
+  const oldBody = comment.body;
+
+  bodyEl.innerHTML = `<textarea id="edit-file-comment-textarea" style="width:100%;min-height:60px;padding:8px;background:#0d1117;color:#e6edf3;border:1px solid #30363d;border-radius:6px;font-family:inherit;font-size:13px;resize:vertical;">${escapeHtml(oldBody)}</textarea>`;
+  actionsEl.innerHTML = `
+    <button onclick="cancelFileCommentEdit('${id}')">Cancel</button>
+    <button onclick="saveFileCommentEdit('${id}')">Save</button>
+  `;
+  const ta = document.getElementById('edit-file-comment-textarea');
+  if (ta) ta.focus();
+}
+
+async function saveFileCommentEdit(id) {
+  const ta = document.getElementById('edit-file-comment-textarea');
+  const body = ta ? ta.value.trim() : '';
+  if (!body) return;
+  const res = await fetch(`/${repoSlug}/api/comments/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ body }),
+  });
+  if (res.ok) {
+    await fetchComments();
+    renderComments();
+  }
+}
+
+function cancelFileCommentEdit(id) {
+  // Re-render to restore original state
+  renderComments();
 }
 
 // Keyboard shortcuts

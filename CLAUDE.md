@@ -38,24 +38,33 @@ Slug must be alphanumeric + hyphens. Path must be an existing directory on disk.
 
 ### Diff & comments
 
-| Method | Path                                    | Purpose                   |
-|--------|-----------------------------------------|---------------------------|
-| GET    | `/<repo>/api/diff`                      | Get parsed git diff       |
-| GET    | `/<repo>/api/comments`                  | List comments             |
-| POST   | `/<repo>/api/comments`                  | Create comment            |
-| GET    | `/<repo>/api/comments/<id>`             | Get comment               |
-| PUT    | `/<repo>/api/comments/<id>`             | Update comment body       |
-| DELETE | `/<repo>/api/comments/<id>`             | Delete comment            |
-| DELETE | `/<repo>/api/comments`                  | Clear all repo comments   |
+| Method | Path                                    | Purpose                          |
+|--------|-----------------------------------------|----------------------------------|
+| GET    | `/<repo>/api/diff`                      | Get parsed git diff              |
+| GET    | `/<repo>/api/file-lines`                | Get lines from working tree file |
+| GET    | `/<repo>/api/comments`                  | List comments                    |
+| POST   | `/<repo>/api/comments`                  | Create comment                   |
+| GET    | `/<repo>/api/comments/<id>`             | Get comment                      |
+| PUT    | `/<repo>/api/comments/<id>`             | Update comment body              |
+| DELETE | `/<repo>/api/comments/<id>`             | Delete comment                   |
+| DELETE | `/<repo>/api/comments`                  | Clear all repo comments          |
+
+`GET /<repo>/api/file-lines?path=<file>&start=<line>&end=<line>` — returns `{lines, start, end, total_lines}`. Used by the expand-hidden-lines feature.
+
+`GET /<repo>/api/diff` response includes `new_total_lines` per file (line count of the working tree file).
+
+Comments use `side` = `"left"` | `"right"` | `"file"`. File-level comments use `side: "file"`, `start_line: 0`, `end_line: 0`.
 
 ## UI features
 
 - **Split / Unified view** toggle (defaults to split)
 - **File search** panel with fuzzy filtering (`Cmd+P` / `Ctrl+P` to focus)
 - **Syntax highlighting** via highlight.js (language detected from file extension)
+- **Expand hidden lines** between diff hunks (GitHub-style up/down/all controls)
 - **Inline comments**: click a line number to select, shift+click to extend range, then click `+` to comment
+- **File-level comments**: click 💬 in the file header
 - **Edit / Delete** comments inline
-- **Reload** button: re-fetches the diff and clears all comments
+- **Clear comments** button: deletes all comments (with confirmation)
 
 ## Development
 
