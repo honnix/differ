@@ -247,14 +247,13 @@ h1 {
 }
 
 .line-num {
-  width: 1%;
-  min-width: 40px;
   padding: 0 8px;
   text-align: right;
   color: #484f58;
   user-select: none;
   cursor: pointer;
   position: relative;
+  white-space: nowrap;
 }
 
 .line-num:first-child { border-right: 1px solid #30363d; }
@@ -324,9 +323,7 @@ h1 {
 }
 
 .split-table .line-num {
-  width: 44px;
-  min-width: 44px;
-  max-width: 44px;
+  white-space: nowrap;
 }
 
 .split-table .split-content {
@@ -362,18 +359,7 @@ h1 {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
   gap: 0;
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 100%;
-}
-
-.hunk-header .line-num,
-.hunk-header .split-left-num {
-  position: relative;
 }
 
 .expand-btn {
@@ -405,20 +391,6 @@ h1 {
   background: rgba(56, 139, 253, 0.1);
   padding: 0;
   user-select: none;
-}
-
-.expand-row .line-num,
-.expand-row .split-left-num {
-  position: relative;
-}
-
-.expand-row .expand-gutter {
-  position: absolute;
-  left: 0; top: 0; bottom: 0; width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
 }
 
 /* Binary file notice */
@@ -1146,6 +1118,21 @@ function render() {
 const EXPAND_CHUNK = 20;
 const EXPAND_ALL_THRESHOLD = 20;
 
+function lineNumWidth(file) {
+  // Compute width in px based on the max line number (digits * char width + padding)
+  const totalLines = file.new_total_lines || 0;
+  let maxLine = totalLines;
+  for (const hunk of (file.hunks || [])) {
+    for (const line of hunk.lines) {
+      if (line.old_line != null && line.old_line > maxLine) maxLine = line.old_line;
+      if (line.new_line != null && line.new_line > maxLine) maxLine = line.new_line;
+    }
+  }
+  const digits = Math.max(2, String(maxLine).length);
+  // ~7.2px per char at 12px monospace + 16px padding + 18px for gutter button
+  return Math.ceil(digits * 7.2) + 16 + 18;
+}
+
 function computeGaps(file) {
   const hunks = file.hunks;
   if (!hunks || hunks.length === 0) return [];
@@ -1166,13 +1153,22 @@ function computeGaps(file) {
     });
   }
 
+  // Helper: find the max old/new line numbers in a hunk
+  function hunkEndLines(hunk) {
+    let oldEnd = hunk.old_start - 1;
+    let newEnd = hunk.new_start - 1;
+    for (const line of hunk.lines) {
+      if (line.old_line != null) oldEnd = line.old_line;
+      if (line.new_line != null) newEnd = line.new_line;
+    }
+    return { oldEnd, newEnd };
+  }
+
   // Between hunks
   for (let i = 0; i < hunks.length - 1; i++) {
     const hunk = hunks[i];
     const nextHunk = hunks[i + 1];
-    const lastLine = hunk.lines[hunk.lines.length - 1];
-    const oldEnd = lastLine ? (lastLine.old_line != null ? lastLine.old_line : hunk.old_start) : hunk.old_start;
-    const newEnd = lastLine ? (lastLine.new_line != null ? lastLine.new_line : hunk.new_start) : hunk.new_start;
+    const { oldEnd, newEnd } = hunkEndLines(hunk);
     const gapOldStart = oldEnd + 1;
     const gapOldEnd = nextHunk.old_start - 1;
     const gapNewStart = newEnd + 1;
@@ -1193,9 +1189,7 @@ function computeGaps(file) {
   // After last hunk
   if (totalLines > 0) {
     const lastHunk = hunks[hunks.length - 1];
-    const lastLine = lastHunk.lines[lastHunk.lines.length - 1];
-    const oldEnd = lastLine ? (lastLine.old_line != null ? lastLine.old_line : lastHunk.old_start) : lastHunk.old_start;
-    const newEnd = lastLine ? (lastLine.new_line != null ? lastLine.new_line : lastHunk.new_start) : lastHunk.new_start;
+    const { oldEnd, newEnd } = hunkEndLines(lastHunk);
     if (newEnd < totalLines) {
       gaps.push({
         position: 'after',
@@ -1253,20 +1247,8 @@ function populateExpandGutter(container, file, gap, hunkHeaderRow) {
   }
 }
 
-// Attach expand buttons into a hunk header row's gutter cell
-function attachExpandToHunkHeader(hunkRow, file, gap, isSplit) {
-  const gutterCell = isSplit
-    ? hunkRow.querySelector('.split-left-num')
-    : hunkRow.querySelector('.line-num');
-  if (!gutterCell) return;
-  const container = document.createElement('div');
-  container.className = 'expand-gutter';
-  populateExpandGutter(container, file, gap, hunkRow);
-  gutterCell.appendChild(container);
-}
-
-// Create a standalone expand row (for after-last-hunk gap)
-function createAfterExpandRow(file, gap, isSplit) {
+// Create a standalone expand row
+function createExpandRow(file, gap, isSplit) {
   const row = document.createElement('tr');
   row.className = (isSplit ? 'split-row' : 'diff-row') + ' expand-row hunk-header';
 
@@ -1322,17 +1304,32 @@ function buildContextRows(lines, startOld, startNew, file, lang, isSplit) {
 
     if (isSplit) {
       row.className = 'split-row context';
-      const leftNum = document.createElement('td');
-      leftNum.className = 'line-num split-left-num';
-      leftNum.textContent = oldNum;
+      const leftNumTd = document.createElement('td');
+      leftNumTd.className = 'line-num split-left-num';
+      leftNumTd.textContent = oldNum;
+      leftNumTd.addEventListener('click', (e) => handleLineNumClick(e, file.new_name, 'left', oldNum, row));
+      const leftBtn = document.createElement('button');
+      leftBtn.className = 'gutter-btn';
+      leftBtn.textContent = '+';
+      leftBtn.addEventListener('click', (e) => handleGutterClick(e, file.new_name, 'left', oldNum, row));
+      leftNumTd.appendChild(leftBtn);
+
       const leftContent = document.createElement('td');
       leftContent.className = 'split-left';
       leftContent.innerHTML = content;
       const divider = document.createElement('td');
       divider.className = 'split-divider';
-      const rightNum = document.createElement('td');
-      rightNum.className = 'line-num split-right-num';
-      rightNum.textContent = newNum;
+
+      const rightNumTd = document.createElement('td');
+      rightNumTd.className = 'line-num split-right-num';
+      rightNumTd.textContent = newNum;
+      rightNumTd.addEventListener('click', (e) => handleLineNumClick(e, file.new_name, 'right', newNum, row));
+      const rightBtn = document.createElement('button');
+      rightBtn.className = 'gutter-btn';
+      rightBtn.textContent = '+';
+      rightBtn.addEventListener('click', (e) => handleGutterClick(e, file.new_name, 'right', newNum, row));
+      rightNumTd.appendChild(rightBtn);
+
       const rightContent = document.createElement('td');
       rightContent.className = 'split-right';
       rightContent.innerHTML = content;
@@ -1341,10 +1338,10 @@ function buildContextRows(lines, startOld, startNew, file, lang, isSplit) {
       row.dataset.leftLine = oldNum;
       row.dataset.rightLine = newNum;
 
-      row.appendChild(leftNum);
+      row.appendChild(leftNumTd);
       row.appendChild(leftContent);
       row.appendChild(divider);
-      row.appendChild(rightNum);
+      row.appendChild(rightNumTd);
       row.appendChild(rightContent);
     } else {
       row.className = 'diff-row context';
@@ -1355,9 +1352,17 @@ function buildContextRows(lines, startOld, startNew, file, lang, isSplit) {
       const oldTd = document.createElement('td');
       oldTd.className = 'line-num';
       oldTd.textContent = oldNum;
+
       const newTd = document.createElement('td');
       newTd.className = 'line-num';
       newTd.textContent = newNum;
+      newTd.addEventListener('click', (e) => handleLineNumClick(e, file.new_name, 'right', newNum, row));
+      const gutterBtn = document.createElement('button');
+      gutterBtn.className = 'gutter-btn';
+      gutterBtn.textContent = '+';
+      gutterBtn.addEventListener('click', (e) => handleGutterClick(e, file.new_name, 'right', newNum, row));
+      newTd.appendChild(gutterBtn);
+
       const contentTd = document.createElement('td');
       contentTd.className = 'line-content';
       contentTd.innerHTML = content;
@@ -1397,11 +1402,21 @@ async function handleExpand(file, gap, direction, hunkRow) {
   const oldStart = gap.oldStart + (fetchStart - gap.newStart);
   const rows = buildContextRows(data.lines, oldStart, fetchStart, file, lang, isSplit);
 
-  const table = hunkRow.parentNode;
+  // expandRow is always a standalone row
+  const expandRow = hunkRow;
+  const table = expandRow.parentNode;
 
-  // All expanded lines go before the hunk header row
-  for (const r of rows) {
-    table.insertBefore(r, hunkRow);
+  if (direction === 'up') {
+    // Insert AFTER the expand row (between it and the next hunk)
+    const ref = expandRow.nextSibling;
+    for (const r of rows) {
+      table.insertBefore(r, ref);
+    }
+  } else {
+    // 'down' and 'all': insert BEFORE the expand row
+    for (const r of rows) {
+      table.insertBefore(r, expandRow);
+    }
   }
 
   // Update gap range
@@ -1411,22 +1426,17 @@ async function handleExpand(file, gap, direction, hunkRow) {
   const newGapOldEnd = gap.oldStart + (newGapNewEnd - gap.newStart);
 
   if (direction === 'all' || newGapNewStart > newGapNewEnd) {
-    // No more hidden lines — remove expand buttons (or the whole row for after-gap)
-    if (gap.position === 'after') {
-      hunkRow.remove();
-    } else {
-      const gutter = hunkRow.querySelector('.expand-gutter');
-      if (gutter) gutter.remove();
-    }
+    // No more hidden lines — remove the expand row
+    expandRow.remove();
   } else {
     gap.oldStart = newGapOldStart;
     gap.oldEnd = newGapOldEnd;
     gap.newStart = newGapNewStart;
     gap.newEnd = newGapNewEnd;
     gap.hiddenCount = newGapNewEnd - newGapNewStart + 1;
-    // Rebuild buttons
-    const gutter = hunkRow.querySelector('.expand-gutter');
-    if (gutter) populateExpandGutter(gutter, file, gap, hunkRow);
+    // Rebuild buttons on the expand row
+    const gutter = expandRow.querySelector('.expand-gutter');
+    if (gutter) populateExpandGutter(gutter, file, gap, expandRow);
   }
 }
 
@@ -1441,19 +1451,28 @@ function renderUnifiedTable(file) {
   const gapByHunkIndex = {};
   for (const g of gaps) gapByHunkIndex[g.hunkIndex] = g;
 
+  // Dynamic column widths based on max line number
+  const numW = lineNumWidth(file);
+  const colgroup = document.createElement('colgroup');
+  colgroup.innerHTML =
+    `<col style="width:${numW}px">` +  // old line-num
+    `<col style="width:${numW}px">` +  // new line-num
+    `<col>`;                            // content
+  table.appendChild(colgroup);
+
   for (let hi = 0; hi < file.hunks.length; hi++) {
     const hunk = file.hunks[hi];
+
+    // Standalone expand row before this hunk if there's a gap
+    const gapBefore = gapByHunkIndex[hi];
+    if (gapBefore) {
+      table.appendChild(createExpandRow(file, gapBefore, false));
+    }
 
     const hunkRow = document.createElement('tr');
     hunkRow.className = 'diff-row hunk-header';
     hunkRow.innerHTML = `<td class="line-num"></td><td class="line-num"></td><td class="line-content">${escapeHtml(hunk.header)}</td>`;
     table.appendChild(hunkRow);
-
-    // Attach expand buttons into the hunk header gutter
-    const gapBefore = gapByHunkIndex[hi];
-    if (gapBefore) {
-      attachExpandToHunkHeader(hunkRow, file, gapBefore, false);
-    }
 
     for (const line of hunk.lines) {
       if (line.type === 'no_newline') {
@@ -1518,7 +1537,7 @@ function renderUnifiedTable(file) {
   // Standalone expand row after last hunk
   const gapAfter = gapByHunkIndex[file.hunks.length];
   if (gapAfter) {
-    table.appendChild(createAfterExpandRow(file, gapAfter, false));
+    table.appendChild(createExpandRow(file, gapAfter, false));
   }
 
   return table;
@@ -1584,10 +1603,27 @@ function renderSplitTable(file) {
   const gapByHunkIndex = {};
   for (const g of gaps) gapByHunkIndex[g.hunkIndex] = g;
 
+  // Dynamic column widths based on max line number
+  const numW = lineNumWidth(file);
+  const colgroup = document.createElement('colgroup');
+  colgroup.innerHTML =
+    `<col style="width:${numW}px">` +  // left line-num
+    `<col>` +                           // left content
+    `<col style="width:1px">` +         // divider
+    `<col style="width:${numW}px">` +   // right line-num
+    `<col>`;                            // right content
+  table.appendChild(colgroup);
+
   for (let hi = 0; hi < file.hunks.length; hi++) {
     const hunk = file.hunks[hi];
 
     // Hunk header spans full width
+    // Standalone expand row before this hunk if there's a gap
+    const gapBefore = gapByHunkIndex[hi];
+    if (gapBefore) {
+      table.appendChild(createExpandRow(file, gapBefore, true));
+    }
+
     const hunkRow = document.createElement('tr');
     hunkRow.className = 'split-row hunk-header';
     hunkRow.innerHTML =
@@ -1595,12 +1631,6 @@ function renderSplitTable(file) {
       `<td class="split-divider"></td>` +
       `<td class="line-num split-right-num"></td><td colspan="1"></td>`;
     table.appendChild(hunkRow);
-
-    // Attach expand buttons into the hunk header gutter
-    const gapBefore = gapByHunkIndex[hi];
-    if (gapBefore) {
-      attachExpandToHunkHeader(hunkRow, file, gapBefore, true);
-    }
 
     const paired = pairHunkLines(hunk.lines);
 
@@ -1697,7 +1727,7 @@ function renderSplitTable(file) {
   // Standalone expand row after last hunk
   const gapAfter = gapByHunkIndex[file.hunks.length];
   if (gapAfter) {
-    table.appendChild(createAfterExpandRow(file, gapAfter, true));
+    table.appendChild(createExpandRow(file, gapAfter, true));
   }
 
   return table;
