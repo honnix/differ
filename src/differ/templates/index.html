@@ -1245,9 +1245,10 @@ function populateExpandGutter(container, file, gap, hunkHeaderRow) {
     container.appendChild(makeBtn('up', 'Expand up'));
   } else if (gap.position === 'after') {
     container.appendChild(makeBtn('down', 'Expand down'));
+  } else if (showAll) {
+    container.appendChild(makeBtn('all', `Expand all ${gap.hiddenCount} hidden lines`));
   } else {
     container.appendChild(makeBtn('down', 'Expand from top of gap'));
-    if (showAll) container.appendChild(makeBtn('all', `Expand all ${gap.hiddenCount} hidden lines`));
     container.appendChild(makeBtn('up', 'Expand from bottom of gap'));
   }
 }
