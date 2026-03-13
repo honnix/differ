@@ -18,9 +18,13 @@ Server runs on http://localhost:5001.
 ```
 src/differ/
   app.py              # Flask app — all routes and logic
+  static/
+    style.css         # Diff viewer styles
+    app.js            # Diff viewer client-side logic
+    favicon.svg       # Site icon
   templates/
     repos.html        # Repo management page (index)
-    index.html        # Diff viewer for a single repo
+    index.html        # Diff viewer HTML shell (loads static/style.css + static/app.js)
 ```
 
 ## API
