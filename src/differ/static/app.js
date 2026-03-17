@@ -1159,15 +1159,45 @@ function clearRangeHighlights() {
   document.querySelectorAll('.range-selected').forEach(el => el.classList.remove('range-selected'));
 }
 
+function getSelectedLineContent(file, side, startLine, endLine) {
+  const fileData = diffData.find(f => f.new_name === file || f.old_name === file);
+  if (!fileData) return '';
+  const lines = [];
+  for (const hunk of fileData.hunks) {
+    for (const line of hunk.lines) {
+      const lineNum = side === 'left' ? line.old_line : line.new_line;
+      if (lineNum != null && lineNum >= startLine && lineNum <= endLine) {
+        lines.push(line.content);
+      }
+    }
+  }
+  return lines.join('\n');
+}
+
+function insertSuggestionTemplate(file, side, startLine, endLine) {
+  const ta = document.getElementById('comment-textarea');
+  if (!ta) return;
+  const content = getSelectedLineContent(file, side, startLine, endLine);
+  ta.value = '```suggestion\n' + content + '\n```';
+  ta.focus();
+  // Place cursor inside the suggestion, before the closing ```
+  const pos = ta.value.length - 4;
+  ta.setSelectionRange(pos, pos);
+}
+
 function buildCommentFormHtml(file, side, startLine, endLine) {
   const rangeLabel = side === 'file'
     ? 'file comment'
     : (startLine === endLine ? `Line ${startLine}` : `Lines ${startLine}\u2013${endLine}`);
+  const suggestBtn = side !== 'file'
+    ? `<button class="btn btn-suggest" onclick="insertSuggestionTemplate('${escapeHtml(file)}','${side}',${startLine},${endLine})" title="Suggest a change">Suggest change</button>`
+    : '';
   return `
     <div class="comment-form">
       <div style="font-size:12px;color:#8b949e;">${escapeHtml(file)} \u00b7 ${side} \u00b7 ${rangeLabel}</div>
       <textarea id="comment-textarea" placeholder="Write a comment\u2026" autofocus></textarea>
       <div class="comment-form-actions">
+        ${suggestBtn}
         <button class="btn btn-cancel" onclick="closeCommentForm()">Cancel</button>
         <button class="btn btn-primary" onclick="submitComment('${escapeHtml(file)}','${side}',${startLine},${endLine})">Comment</button>
       </div>

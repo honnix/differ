@@ -504,6 +504,13 @@ h1 {
   justify-content: flex-end;
 }
 
+.btn-suggest {
+  background: #21262d;
+  color: #e6edf3;
+  margin-right: auto;
+}
+.btn-suggest:hover { background: #30363d; }
+
 .btn {
   padding: 5px 16px;
   border-radius: 6px;
