@@ -185,6 +185,16 @@ function addRepoItem(slug, path) {
   updateEmpty();
 }
 
+// Auto-fill slug from the last path segment
+pathInput.addEventListener('input', () => {
+  if (slugInput.dataset.manual) return;
+  const parts = pathInput.value.replace(/\/+$/, '').split('/');
+  const last = parts[parts.length - 1] || '';
+  slugInput.value = last.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/^-+|-+$/g, '');
+});
+slugInput.addEventListener('input', () => { slugInput.dataset.manual = '1'; });
+slugInput.addEventListener('focus', () => { slugInput.dataset.manual = '1'; });
+
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
   const slug = slugInput.value.trim();
@@ -202,6 +212,7 @@ form.addEventListener('submit', async (e) => {
     addRepoItem(data.slug, data.path);
     slugInput.value = '';
     pathInput.value = '';
+    delete slugInput.dataset.manual;
   } else {
     const data = await res.json();
     showError(data.error || 'Failed to add repo');
