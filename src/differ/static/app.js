@@ -1,5 +1,16 @@
 const appEl = document.getElementById('app');
 const repoSlug = appEl.dataset.repoSlug;
+
+function fileStatusSvg(type) {
+  // type: 'new', 'deleted', 'renamed', 'modified'
+  const svgs = {
+    modified: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="4" fill="currentColor"/></svg>',
+    new: '<svg viewBox="0 0 16 16"><path d="M8 4v8M4 8h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+    deleted: '<svg viewBox="0 0 16 16"><path d="M4 8h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+    renamed: '<svg viewBox="0 0 16 16"><path d="M4 8h7M9 5l3 3-3 3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>',
+  };
+  return svgs[type] || '';
+}
 let diffData = [];
 let commentsData = [];
 let viewMode = 'split'; // 'unified' | 'split'
@@ -101,21 +112,10 @@ function renderTreeNode(node, parentEl, depth, filter) {
       nameSpan.className = 'tree-file-name';
       nameSpan.textContent = key;
       fileEl.appendChild(nameSpan);
+      const type = file.is_new ? 'new' : file.is_deleted ? 'deleted' : file.is_renamed ? 'renamed' : 'modified';
       const statusEl = document.createElement('span');
-      statusEl.className = 'tree-file-status';
-      if (file.is_new) {
-        statusEl.classList.add('tree-file-status-new');
-        statusEl.textContent = '+';
-      } else if (file.is_deleted) {
-        statusEl.classList.add('tree-file-status-deleted');
-        statusEl.textContent = '\u2212';
-      } else if (file.is_renamed) {
-        statusEl.classList.add('tree-file-status-renamed');
-        statusEl.textContent = '\u2192';
-      } else {
-        statusEl.classList.add('tree-file-status-modified');
-        statusEl.textContent = '\u2022';
-      }
+      statusEl.className = 'tree-file-status tree-file-status-' + type;
+      statusEl.innerHTML = fileStatusSvg(type);
       fileEl.appendChild(statusEl);
 
       fileEl.addEventListener('click', () => {
@@ -376,18 +376,10 @@ function render() {
     nameSpan.textContent = fileName;
     header.appendChild(nameSpan);
     if (file.is_new || file.is_deleted || file.is_renamed) {
+      const type = file.is_new ? 'new' : file.is_deleted ? 'deleted' : 'renamed';
       const statusIcon = document.createElement('span');
-      statusIcon.className = 'file-status-icon';
-      if (file.is_new) {
-        statusIcon.classList.add('file-status-new');
-        statusIcon.textContent = '+';
-      } else if (file.is_deleted) {
-        statusIcon.classList.add('file-status-deleted');
-        statusIcon.textContent = '\u2212';
-      } else {
-        statusIcon.classList.add('file-status-renamed');
-        statusIcon.textContent = '\u2192';
-      }
+      statusIcon.className = 'file-status-icon file-status-' + type;
+      statusIcon.innerHTML = fileStatusSvg(type);
       header.appendChild(statusIcon);
     }
     const copyBtn = document.createElement('button');

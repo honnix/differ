@@ -164,12 +164,11 @@ h1 {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 10px;
-  font-weight: 700;
   border-radius: 3px;
   border: 1px solid;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
 }
+
+.file-status-icon svg { width: 10px; height: 10px; }
 
 .file-status-new { color: #3fb950; border-color: #3fb950; }
 .file-status-deleted { color: #f85149; border-color: #f85149; }
@@ -776,12 +775,11 @@ h1 {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 10px;
-  font-weight: 700;
   border-radius: 3px;
   border: 1px solid;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
 }
+
+.tree-file-status svg { width: 10px; height: 10px; }
 
 .tree-file-status-modified { color: #d29922; border-color: #d29922; }
 .tree-file-status-new { color: #3fb950; border-color: #3fb950; }
