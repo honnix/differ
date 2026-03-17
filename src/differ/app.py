@@ -77,10 +77,13 @@ def parse_diff(diff_text: str) -> list[dict[str, Any]]:
         # Extract file names from --- / +++ if present
         minus_match = re.search(r"^--- (?:a/)?(.+)$", body, re.MULTILINE)
         plus_match = re.search(r"^\+\+\+ (?:b/)?(.+)$", body, re.MULTILINE)
-        if minus_match:
+        is_new = minus_match is not None and minus_match.group(1) == "/dev/null"
+        is_deleted = plus_match is not None and plus_match.group(1) == "/dev/null"
+        if minus_match and not is_new:
             old_name = minus_match.group(1)
-        if plus_match:
+        if plus_match and not is_deleted:
             new_name = plus_match.group(1)
+        is_renamed = not is_new and not is_deleted and old_name != new_name
 
         # Parse hunks
         hunks = []
@@ -172,6 +175,9 @@ def parse_diff(diff_text: str) -> list[dict[str, Any]]:
                 "new_name": new_name,
                 "hunks": hunks,
                 "binary": False,
+                "is_new": is_new,
+                "is_deleted": is_deleted,
+                "is_renamed": is_renamed,
             }
         )
 

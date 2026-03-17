@@ -29,7 +29,7 @@ function toggleFileTree() {
 function buildTree(files) {
   const root = {};
   files.forEach((file, idx) => {
-    const name = file.old_name === file.new_name ? file.new_name : file.new_name;
+    const name = file.is_deleted ? file.old_name : file.new_name;
     const parts = name.split('/');
     let node = root;
     for (let i = 0; i < parts.length - 1; i++) {
@@ -88,16 +88,35 @@ function renderTreeNode(node, parentEl, depth, filter) {
       // File (val is the index)
       const idx = val;
       const file = diffData[idx];
-      const fullName = file.old_name === file.new_name ? file.new_name : file.new_name;
+      const fullName = file.is_deleted ? file.old_name : file.new_name;
 
       if (filter && !fullName.toLowerCase().includes(filter)) continue;
 
       const fileEl = document.createElement('div');
       fileEl.className = 'tree-file';
       fileEl.style.paddingLeft = (8 + (depth + 1) * 12) + 'px';
-      fileEl.textContent = key;
       fileEl.title = fullName;
       fileEl.dataset.fileIdx = idx;
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'tree-file-name';
+      nameSpan.textContent = key;
+      fileEl.appendChild(nameSpan);
+      const statusEl = document.createElement('span');
+      statusEl.className = 'tree-file-status';
+      if (file.is_new) {
+        statusEl.classList.add('tree-file-status-new');
+        statusEl.textContent = '+';
+      } else if (file.is_deleted) {
+        statusEl.classList.add('tree-file-status-deleted');
+        statusEl.textContent = '\u2212';
+      } else if (file.is_renamed) {
+        statusEl.classList.add('tree-file-status-renamed');
+        statusEl.textContent = '\u2192';
+      } else {
+        statusEl.classList.add('tree-file-status-modified');
+        statusEl.textContent = '\u2022';
+      }
+      fileEl.appendChild(statusEl);
 
       fileEl.addEventListener('click', () => {
         // Highlight active
@@ -210,7 +229,11 @@ function setView(mode) {
 // File search
 // =====================
 function getFileNames() {
-  return diffData.map(f => f.old_name === f.new_name ? f.new_name : `${f.old_name} \u2192 ${f.new_name}`);
+  return diffData.map(f => {
+    if (f.is_deleted) return f.old_name;
+    if (f.is_renamed) return `${f.old_name} \u2192 ${f.new_name}`;
+    return f.new_name;
+  });
 }
 
 function highlightMatch(text, query) {
@@ -328,9 +351,20 @@ function render() {
     const card = document.createElement('div');
     card.className = 'file-card';
 
-    const fileName = file.old_name === file.new_name
-      ? file.new_name
-      : `${file.old_name} \u2192 ${file.new_name}`;
+    let fileName;
+    let fileLabel = '';
+    if (file.is_new) {
+      fileName = file.new_name;
+      fileLabel = 'new file';
+    } else if (file.is_deleted) {
+      fileName = file.old_name;
+      fileLabel = 'deleted';
+    } else if (file.is_renamed) {
+      fileName = `${file.old_name} \u2192 ${file.new_name}`;
+      fileLabel = 'renamed';
+    } else {
+      fileName = file.new_name;
+    }
     const header = document.createElement('div');
     header.className = 'file-header';
     const foldArrow = document.createElement('span');
@@ -341,13 +375,28 @@ function render() {
     nameSpan.className = 'file-header-name';
     nameSpan.textContent = fileName;
     header.appendChild(nameSpan);
+    if (file.is_new || file.is_deleted || file.is_renamed) {
+      const statusIcon = document.createElement('span');
+      statusIcon.className = 'file-status-icon';
+      if (file.is_new) {
+        statusIcon.classList.add('file-status-new');
+        statusIcon.textContent = '+';
+      } else if (file.is_deleted) {
+        statusIcon.classList.add('file-status-deleted');
+        statusIcon.textContent = '\u2212';
+      } else {
+        statusIcon.classList.add('file-status-renamed');
+        statusIcon.textContent = '\u2192';
+      }
+      header.appendChild(statusIcon);
+    }
     const copyBtn = document.createElement('button');
     copyBtn.className = 'copy-btn';
     copyBtn.title = 'Copy file path';
     copyBtn.innerHTML = '\u2398';
     copyBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      navigator.clipboard.writeText(file.new_name);
+      navigator.clipboard.writeText(file.is_deleted ? file.old_name : file.new_name);
       copyBtn.classList.add('copied');
       copyBtn.innerHTML = '\u2713';
       setTimeout(() => { copyBtn.classList.remove('copied'); copyBtn.innerHTML = '\u2398'; }, 1500);
@@ -697,7 +746,7 @@ async function handleExpand(file, gap, direction, hunkRow) {
   if (!res.ok) return;
   const data = await res.json();
 
-  const lang = langFromFilename(file.new_name);
+  const lang = langFromFilename(file.is_deleted ? file.old_name : file.new_name);
   const oldStart = gap.oldStart + (fetchStart - gap.newStart);
   const rows = buildContextRows(data.lines, oldStart, fetchStart, file, lang, isSplit);
 
@@ -745,7 +794,7 @@ async function handleExpand(file, gap, direction, hunkRow) {
 function renderUnifiedTable(file) {
   const table = document.createElement('table');
   table.className = 'diff-table';
-  const lang = langFromFilename(file.new_name);
+  const lang = langFromFilename(file.is_deleted ? file.old_name : file.new_name);
   const gaps = computeGaps(file);
   const gapByHunkIndex = {};
   for (const g of gaps) gapByHunkIndex[g.hunkIndex] = g;
@@ -897,7 +946,7 @@ function pairHunkLines(lines) {
 function renderSplitTable(file) {
   const table = document.createElement('table');
   table.className = 'split-table';
-  const lang = langFromFilename(file.new_name);
+  const lang = langFromFilename(file.is_deleted ? file.old_name : file.new_name);
   const gaps = computeGaps(file);
   const gapByHunkIndex = {};
   for (const g of gaps) gapByHunkIndex[g.hunkIndex] = g;
