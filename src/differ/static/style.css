@@ -563,6 +563,43 @@ h1 {
   margin-left: 8px;
 }
 
+/* Suggested changes */
+.suggestion-block {
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  overflow: hidden;
+  margin: 6px 0;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.suggestion-header {
+  background: #1c2128;
+  padding: 4px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #8b949e;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+}
+
+.suggestion-block pre {
+  margin: 0;
+  padding: 4px 12px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.suggestion-del {
+  background: rgba(248, 81, 73, 0.15);
+  color: #e6edf3;
+}
+
+.suggestion-add {
+  background: rgba(46, 160, 67, 0.15);
+  color: #e6edf3;
+}
+
 /* Syntax highlighting — keep diff backgrounds transparent */
 .line-content .hljs { background: transparent; padding: 0; }
 .split-left .hljs, .split-right .hljs { background: transparent; padding: 0; }

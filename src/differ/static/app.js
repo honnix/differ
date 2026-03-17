@@ -1293,6 +1293,54 @@ async function saveEditComment(id) {
   }
 }
 
+function renderCommentBody(comment) {
+  const body = comment.body;
+  const suggestionRegex = /```suggestion\n([\s\S]*?)```/g;
+  let lastIdx = 0;
+  let result = '';
+  let match;
+
+  while ((match = suggestionRegex.exec(body)) !== null) {
+    // Text before the suggestion block
+    if (match.index > lastIdx) {
+      result += escapeHtml(body.slice(lastIdx, match.index));
+    }
+
+    const suggested = match[1].replace(/\n$/, ''); // trim trailing newline
+
+    // Get original lines from the diff data
+    const file = diffData.find(f => f.new_name === comment.file);
+    let originalLines = [];
+    if (file && comment.start_line > 0 && comment.end_line > 0) {
+      for (const hunk of file.hunks) {
+        for (const line of hunk.lines) {
+          const lineNum = comment.side === 'left' ? line.old_line : line.new_line;
+          if (lineNum != null && lineNum >= comment.start_line && lineNum <= comment.end_line) {
+            originalLines.push(line.content);
+          }
+        }
+      }
+    }
+
+    result += '<div class="suggestion-block">';
+    result += '<div class="suggestion-header">Suggested change</div>';
+    if (originalLines.length > 0) {
+      result += `<pre class="suggestion-del">${originalLines.map(l => '-' + escapeHtml(l)).join('\n')}</pre>`;
+    }
+    result += `<pre class="suggestion-add">${suggested.split('\n').map(l => '+' + escapeHtml(l)).join('\n')}</pre>`;
+    result += '</div>';
+
+    lastIdx = match.index + match[0].length;
+  }
+
+  // Remaining text after last suggestion
+  if (lastIdx < body.length) {
+    result += escapeHtml(body.slice(lastIdx));
+  }
+
+  return result;
+}
+
 function buildCommentBoxHtml(comment) {
   const rangeLabel = comment.start_line === comment.end_line
     ? `line ${comment.start_line}`
@@ -1309,7 +1357,7 @@ function buildCommentBoxHtml(comment) {
           <button class="btn btn-danger" onclick="deleteComment('${comment.id}')">Delete</button>
         </div>
       </div>
-      <div class="comment-body">${escapeHtml(comment.body)}</div>
+      <div class="comment-body">${renderCommentBody(comment)}</div>
     </div>
   `;
 }
@@ -1432,7 +1480,7 @@ function renderFileComment(comment) {
         <strong>${escapeHtml(comment.author)}</strong>
         <span>${new Date(comment.created_at).toLocaleString()}</span>
       </div>
-      <div class="comment-body">${escapeHtml(comment.body)}</div>
+      <div class="comment-body">${renderCommentBody(comment)}</div>
       <div class="comment-actions">
         <button onclick="editFileComment('${comment.id}', this)">Edit</button>
         <button onclick="deleteComment('${comment.id}')">Delete</button>
