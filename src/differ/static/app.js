@@ -16,6 +16,37 @@ let commentsData = [];
 let viewMode = 'split'; // 'unified' | 'split'
 let fileTreeOpen = false;
 const viewedFiles = new Set(); // tracks viewed file names
+const viewedStorageKey = `differ:viewed:${repoSlug}`;
+
+function fileHash(file) {
+  let h = 0;
+  const s = JSON.stringify(file.hunks);
+  for (let i = 0; i < s.length; i++) {
+    h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+  }
+  return h;
+}
+
+function saveViewedState() {
+  const state = {};
+  for (const name of viewedFiles) {
+    const file = diffData.find(f => (f.is_deleted ? f.old_name : f.new_name) === name);
+    if (file) state[name] = fileHash(file);
+  }
+  localStorage.setItem(viewedStorageKey, JSON.stringify(state));
+}
+
+function restoreViewedState() {
+  try {
+    const state = JSON.parse(localStorage.getItem(viewedStorageKey) || '{}');
+    for (const file of diffData) {
+      const name = file.is_deleted ? file.old_name : file.new_name;
+      if (state[name] !== undefined && state[name] === fileHash(file)) {
+        viewedFiles.add(name);
+      }
+    }
+  } catch { /* ignore corrupt data */ }
+}
 
 // --- File search state ---
 const searchInput = document.getElementById('file-search-input');
@@ -400,16 +431,18 @@ function render() {
     viewedLabel.addEventListener('click', (e) => e.stopPropagation());
     const viewedCb = document.createElement('input');
     viewedCb.type = 'checkbox';
-    viewedCb.checked = viewedFiles.has(file.new_name);
+    const viewedKey = file.is_deleted ? file.old_name : file.new_name;
+    viewedCb.checked = viewedFiles.has(viewedKey);
     viewedCb.addEventListener('change', () => {
       if (viewedCb.checked) {
-        viewedFiles.add(file.new_name);
+        viewedFiles.add(viewedKey);
         card.classList.add('viewed', 'collapsed');
       } else {
-        viewedFiles.delete(file.new_name);
+        viewedFiles.delete(viewedKey);
         card.classList.remove('viewed', 'collapsed');
       }
       updateViewedProgress();
+      saveViewedState();
     });
     viewedLabel.appendChild(viewedCb);
     viewedLabel.appendChild(document.createTextNode('Viewed'));
@@ -427,7 +460,7 @@ function render() {
 
     header.addEventListener('click', () => card.classList.toggle('collapsed'));
     card.appendChild(header);
-    if (viewedFiles.has(file.new_name)) card.classList.add('viewed', 'collapsed');
+    if (viewedFiles.has(viewedKey)) card.classList.add('viewed', 'collapsed');
 
     const body = document.createElement('div');
     body.className = 'file-body';
@@ -1622,5 +1655,6 @@ document.addEventListener('keydown', (e) => {
 // Init
 (async () => {
   await Promise.all([fetchDiff(), fetchComments()]);
+  restoreViewedState();
   render();
 })();
