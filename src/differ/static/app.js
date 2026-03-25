@@ -1645,11 +1645,6 @@ document.addEventListener('keydown', (e) => {
     searchInput.focus();
     renderFileDropdown('');
   }
-  // Cmd/Ctrl+B to toggle file tree
-  if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
-    e.preventDefault();
-    toggleFileTree();
-  }
 });
 
 // Init
