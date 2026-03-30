@@ -307,20 +307,27 @@ h1 {
 }
 
 .diff-table td {
-  padding: 0 8px;
   white-space: pre-wrap;
   word-break: break-all;
   vertical-align: top;
 }
 
+.diff-table td.line-num {
+  padding: 0 14px 0 8px;
+}
+
+.diff-table td.line-content {
+  padding: 0 8px 0 14px;
+}
+
 .line-num {
-  padding: 0 8px;
   text-align: right;
   color: #484f58;
   user-select: none;
   cursor: pointer;
   position: relative;
   white-space: nowrap;
+  overflow: visible;
 }
 
 .line-num:first-child { border-right: 1px solid #30363d; }
@@ -329,26 +336,25 @@ h1 {
 .gutter-btn {
   display: none;
   position: absolute;
-  left: 2px;
-  top: 0;
-  width: 18px;
-  height: 18px;
+  left: 100%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 22px;
+  height: 22px;
   background: #1f6feb;
   color: #fff;
   border: none;
-  border-radius: 3px;
-  font-size: 12px;
-  line-height: 18px;
+  border-radius: 6px;
+  font-size: 14px;
+  line-height: 22px;
   text-align: center;
   cursor: pointer;
   z-index: 10;
 }
 
-.diff-row:hover .gutter-btn,
-.split-row:hover .gutter-btn { display: block; }
+.diff-row:hover .gutter-btn { display: block; }
+.line-num:hover .gutter-btn { display: block; }
 .gutter-btn:hover { background: #388bfd; }
-
-.line-content { width: 100%; }
 
 /* Line type colors */
 .diff-row.addition { background: rgba(46, 160, 67, 0.15); }
@@ -382,19 +388,19 @@ h1 {
 }
 
 .split-table td {
-  padding: 0 8px;
   white-space: pre-wrap;
   word-break: break-all;
   vertical-align: top;
-  overflow: hidden;
 }
 
-.split-table .line-num {
-  white-space: nowrap;
+.split-table td.split-left-num,
+.split-table td.split-right-num {
+  padding: 0 14px 0 8px;
 }
 
-.split-table .split-content {
-  width: 50%;
+.split-table td.split-left,
+.split-table td.split-right {
+  padding: 0 8px 0 14px;
 }
 
 .split-table .split-divider {
@@ -696,7 +702,6 @@ h1 {
 .file-tree-header span { color: #8b949e; font-weight: 400; }
 
 .file-tree-filter {
-  width: 100%;
   padding: 4px 8px;
   margin: 6px 8px;
   width: calc(100% - 16px);
@@ -785,10 +790,6 @@ h1 {
 .tree-file-status-new { color: #3fb950; border-color: #3fb950; }
 .tree-file-status-deleted { color: #f85149; border-color: #f85149; }
 .tree-file-status-renamed { color: #58a6ff; border-color: #58a6ff; }
-
-.tree-file-nested { padding-left: 36px; }
-.tree-file-nested-2 { padding-left: 48px; }
-.tree-file-nested-3 { padding-left: 60px; }
 
 .diff-content { flex: 1; min-width: 0; }
 

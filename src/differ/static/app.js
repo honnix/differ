@@ -189,6 +189,7 @@ async function clearAllComments() {
 async function fetchDiff() {
   const res = await fetch(`/${repoSlug}/api/diff`);
   diffData = await res.json();
+  highlightCache.clear();
 }
 
 async function fetchComments() {
@@ -234,16 +235,83 @@ function langFromFilename(name) {
   return EXT_TO_LANG[ext] || null;
 }
 
-function highlightLine(code, lang) {
-  if (!lang) return null;
-  try {
-    return hljs.highlight(code, { language: lang, ignoreIllegals: true }).value;
-  } catch { return null; }
+// Highlight all lines of a file together to preserve multi-line state
+// (e.g., Python docstrings, multi-line comments). Cache result per file.
+const highlightCache = new Map();
+
+function getHighlightedLines(file) {
+  const name = file.is_deleted ? file.old_name : file.new_name;
+  if (highlightCache.has(name)) return highlightCache.get(name);
+
+  const lang = langFromFilename(name);
+  if (!lang) {
+    highlightCache.set(name, null);
+    return null;
+  }
+
+  // Collect all lines in order (context, additions, deletions)
+  // We highlight old-side and new-side separately to get correct state
+  const oldLines = [];
+  const newLines = [];
+  for (const hunk of file.hunks) {
+    for (const line of hunk.lines) {
+      if (line.type === 'deletion' || line.type === 'context') {
+        oldLines.push({ num: line.old_line, content: line.content });
+      }
+      if (line.type === 'addition' || line.type === 'context') {
+        newLines.push({ num: line.new_line, content: line.content });
+      }
+    }
+  }
+
+  const hlMap = {};
+  for (const [side, lines] of [['old', oldLines], ['new', newLines]]) {
+    try {
+      const joined = lines.map(l => l.content).join('\n');
+      const result = hljs.highlight(joined, { language: lang, ignoreIllegals: true }).value;
+      const rawLines = result.split('\n');
+      // Track open spans across line boundaries so multi-line strings/comments work
+      let openSpans = [];
+      for (let i = 0; i < lines.length && i < rawLines.length; i++) {
+        // Prepend any spans still open from previous lines
+        let line = openSpans.join('') + rawLines[i];
+        // Close them at end of this line
+        line += '</span>'.repeat(openSpans.length);
+        const key = side + ':' + lines[i].num;
+        hlMap[key] = line;
+        // Update openSpans for next line by processing tags in document order
+        const tagRegex = /<span[^>]*>|<\/span>/g;
+        let m;
+        while ((m = tagRegex.exec(rawLines[i])) !== null) {
+          if (m[0] === '</span>') {
+            openSpans.pop();
+          } else {
+            openSpans.push(m[0]);
+          }
+        }
+      }
+    } catch { /* fallback to per-line escaping */ }
+  }
+
+  highlightCache.set(name, hlMap);
+  return hlMap;
 }
 
-function highlightContent(text, lang) {
-  const hl = highlightLine(text, lang);
-  return hl !== null ? hl : escapeHtml(text);
+function highlightContent(text, lang, file, side, lineNum) {
+  if (file) {
+    const hlMap = getHighlightedLines(file);
+    if (hlMap) {
+      const key = side + ':' + lineNum;
+      if (hlMap[key] !== undefined) return hlMap[key];
+    }
+  }
+  // Fallback: single-line highlight
+  if (lang) {
+    try {
+      return hljs.highlight(text, { language: lang, ignoreIllegals: true }).value;
+    } catch { /* fall through */ }
+  }
+  return escapeHtml(text);
 }
 
 // =====================
@@ -672,7 +740,7 @@ function buildContextRows(lines, startOld, startNew, file, lang, isSplit) {
   for (let i = 0; i < lines.length; i++) {
     const oldNum = startOld + i;
     const newNum = startNew + i;
-    const content = highlightContent(lines[i], lang);
+    const content = highlightContent(lines[i], lang, null, null, null);
     const row = document.createElement('tr');
 
     if (isSplit) {
@@ -898,7 +966,9 @@ function renderUnifiedTable(file) {
 
       const contentTd = document.createElement('td');
       contentTd.className = 'line-content';
-      contentTd.innerHTML = highlightContent(line.content, lang);
+      const hlSide = line.type === 'deletion' ? 'old' : 'new';
+      const hlNum = line.type === 'deletion' ? line.old_line : line.new_line;
+      contentTd.innerHTML = highlightContent(line.content, lang, file, hlSide, hlNum);
 
       row.appendChild(oldNumTd);
       row.appendChild(newNumTd);
@@ -1031,7 +1101,7 @@ function renderSplitTable(file) {
       if (pair.left && pair.type !== 'addition') {
         const leftLine = pair.left.old_line;
         leftNumTd.textContent = leftLine != null ? leftLine : '';
-        leftContentTd.innerHTML = highlightContent(pair.left.content, lang);
+        leftContentTd.innerHTML = highlightContent(pair.left.content, lang, file, 'old', leftLine);
 
         // Line number click for selection
         leftNumTd.addEventListener('click', (e) => handleLineNumClick(e, file.new_name, 'left', leftLine, row));
@@ -1058,10 +1128,10 @@ function renderSplitTable(file) {
 
       if (pair.right && pair.type !== 'deletion') {
         rightNumTd.textContent = pair.right.new_line != null ? pair.right.new_line : '';
-        rightContentTd.innerHTML = highlightContent(pair.right.content, lang);
+        rightContentTd.innerHTML = highlightContent(pair.right.content, lang, file, 'new', pair.right.new_line);
       } else if (pair.type === 'context' && pair.right) {
         rightNumTd.textContent = pair.right.new_line != null ? pair.right.new_line : '';
-        rightContentTd.innerHTML = highlightContent(pair.right.content, lang);
+        rightContentTd.innerHTML = highlightContent(pair.right.content, lang, file, 'new', pair.right.new_line);
       }
 
       // Line number click + gutter button on right (for additions and context)
