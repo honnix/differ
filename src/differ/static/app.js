@@ -1715,6 +1715,18 @@ document.addEventListener('keydown', (e) => {
     searchInput.focus();
     renderFileDropdown('');
   }
+  // Cmd/Ctrl+Enter to submit comment
+  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+    const ta = document.getElementById('comment-textarea');
+    if (ta && document.activeElement === ta) {
+      e.preventDefault();
+      const form = ta.closest('.comment-form');
+      if (form) {
+        const submitBtn = form.querySelector('.btn-primary');
+        if (submitBtn) submitBtn.click();
+      }
+    }
+  }
 });
 
 // Init
