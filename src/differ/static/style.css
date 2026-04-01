@@ -121,7 +121,6 @@ h1 {
   border: 1px solid #30363d;
   border-radius: 6px;
   margin-bottom: 16px;
-  overflow: hidden;
 }
 
 .file-header {
@@ -130,6 +129,7 @@ h1 {
   font-size: 13px;
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
   border-bottom: 1px solid #30363d;
+  border-radius: 6px 6px 0 0;
   font-weight: 600;
   position: sticky;
   top: 0;

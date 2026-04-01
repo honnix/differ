@@ -1703,6 +1703,24 @@ function cancelFileCommentEdit(id) {
   renderComments();
 }
 
+// Split view: restrict text selection to one side
+let _blockedCells = null;
+document.addEventListener('mousedown', (e) => {
+  // Restore previously blocked cells
+  if (_blockedCells) {
+    _blockedCells.forEach(c => c.style.userSelect = '');
+    _blockedCells = null;
+  }
+  const cell = e.target.closest('td.split-left, td.split-right');
+  if (!cell) return;
+  const table = cell.closest('.split-table');
+  if (!table) return;
+  const isLeft = cell.classList.contains('split-left');
+  const oppositeClass = isLeft ? 'split-right' : 'split-left';
+  _blockedCells = table.querySelectorAll(`td.${oppositeClass}`);
+  _blockedCells.forEach(c => c.style.userSelect = 'none');
+});
+
 // Keyboard shortcuts
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
