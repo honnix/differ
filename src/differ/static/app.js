@@ -14,7 +14,7 @@ function fileStatusSvg(type) {
 let diffData = [];
 let commentsData = [];
 let viewMode = 'split'; // 'unified' | 'split'
-let fileTreeOpen = false;
+let fileTreeOpen = true;
 const viewedFiles = new Set(); // tracks viewed file names
 const viewedStorageKey = `differ:viewed:${repoSlug}`;
 
@@ -104,6 +104,19 @@ function renderTreeNode(node, parentEl, depth, filter) {
     const val = node[key];
 
     if (typeof val === 'object') {
+      // Flatten single-child directory chains
+      let displayName = key;
+      let childNode = val;
+      while (true) {
+        const childKeys = Object.keys(childNode);
+        if (childKeys.length === 1 && typeof childNode[childKeys[0]] === 'object') {
+          displayName += '/' + childKeys[0];
+          childNode = childNode[childKeys[0]];
+        } else {
+          break;
+        }
+      }
+
       // Directory
       const dirEl = document.createElement('div');
       dirEl.className = 'tree-dir';
@@ -111,7 +124,7 @@ function renderTreeNode(node, parentEl, depth, filter) {
       const label = document.createElement('div');
       label.className = 'tree-dir-label';
       label.style.paddingLeft = (8 + depth * 12) + 'px';
-      label.innerHTML = `<span class="tree-dir-arrow">\u25BC</span>${escapeHtml(key)}/`;
+      label.innerHTML = `<span class="tree-dir-arrow">\u25BC</span>${escapeHtml(displayName)}/`;
       label.addEventListener('click', () => dirEl.classList.toggle('collapsed'));
 
       const children = document.createElement('div');
@@ -120,7 +133,7 @@ function renderTreeNode(node, parentEl, depth, filter) {
       dirEl.appendChild(label);
       dirEl.appendChild(children);
 
-      renderTreeNode(val, children, depth + 1, filter);
+      renderTreeNode(childNode, children, depth + 1, filter);
 
       // Hide dir if all children filtered out
       if (filter && children.children.length === 0) continue;
