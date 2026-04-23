@@ -192,15 +192,25 @@ function updateEmpty() {
   emptyMsg.style.display = list.children.length === 0 ? '' : 'none';
 }
 
-function addRepoItem(slug, path) {
-  const li = document.createElement('li');
-  li.dataset.slug = slug;
-  li.innerHTML =
-    '<a href="/' + slug + '/">' + slug +
-    '<div class="repo-path">' + path + '</div></a>' +
-    '<button class="dup-btn" title="Duplicate repo" data-path="' + path + '">&#x2398;</button>' +
+function repoItemHtml(slug, path) {
+  const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  return '<a href="/' + esc(slug) + '/">' + esc(slug) +
+    '<div class="repo-path">' + esc(path) + '</div></a>' +
+    '<button class="dup-btn" title="Duplicate repo" data-path="' + esc(path) + '">&#x2398;</button>' +
     '<button class="delete-btn" title="Delete repo">&times;</button>';
-  list.appendChild(li);
+}
+
+async function refreshRepoList() {
+  const res = await fetch('/api/repos');
+  if (!res.ok) return;
+  const repos = await res.json();
+  list.innerHTML = '';
+  for (const r of repos) {
+    const li = document.createElement('li');
+    li.dataset.slug = r.slug;
+    li.innerHTML = repoItemHtml(r.slug, r.path);
+    list.appendChild(li);
+  }
   updateEmpty();
 }
 
@@ -234,8 +244,7 @@ form.addEventListener('submit', async (e) => {
   });
 
   if (res.ok) {
-    const data = await res.json();
-    addRepoItem(data.slug, data.path);
+    await refreshRepoList();
     slugInput.value = '';
     pathInput.value = '';
     delete slugInput.dataset.manual;
