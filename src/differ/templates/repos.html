@@ -5,190 +5,20 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Differ — Repositories</title>
 <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-<style>
-* { margin: 0; padding: 0; box-sizing: border-box; }
-
-body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-  background: #0d1117;
-  color: #e6edf3;
-  padding: 16px;
-}
-
-h1 {
-  font-size: 20px;
-  margin-bottom: 16px;
-  font-weight: 600;
-}
-
-.add-form {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 20px;
-  align-items: center;
-}
-
-.add-form input {
-  padding: 8px 12px;
-  border: 1px solid #30363d;
-  border-radius: 6px;
-  background: #161b22;
-  color: #e6edf3;
-  font-size: 14px;
-  font-family: inherit;
-}
-
-.add-form input::placeholder { color: #484f58; }
-
-.add-form input:focus {
-  outline: none;
-  border-color: #58a6ff;
-}
-
-.add-form button {
-  padding: 8px 16px;
-  border: 1px solid #238636;
-  border-radius: 6px;
-  background: #238636;
-  color: #fff;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.add-form button:hover { background: #2ea043; }
-
-.error-msg {
-  color: #f85149;
-  font-size: 13px;
-  margin-bottom: 12px;
-  display: none;
-}
-
-.repo-list {
-  list-style: none;
-}
-
-.repo-list li {
-  margin-bottom: 8px;
-  display: flex;
-  align-items: stretch;
-}
-
-.repo-group-header {
-  display: block;
-  padding: 4px 4px;
-  margin-top: 12px;
-  margin-bottom: 6px;
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
-  font-size: 12px;
-  color: #8b949e;
-}
-
-.repo-group-header:first-child {
-  margin-top: 0;
-}
-
-.repo-list li.in-group {
-  margin-left: 16px;
-  position: relative;
-}
-
-.repo-list li.in-group::before {
-  content: "";
-  position: absolute;
-  left: -10px;
-  top: 0;
-  bottom: 0;
-  width: 2px;
-  background: #30363d;
-}
-
-.repo-list a {
-  flex: 1;
-  display: block;
-  padding: 12px 16px;
-  border: 1px solid #30363d;
-  border-radius: 6px 0 0 6px;
-  background: #161b22;
-  color: #58a6ff;
-  text-decoration: none;
-  font-size: 15px;
-  font-weight: 500;
-}
-
-.repo-list li:only-child a,
-.repo-list a:only-child {
-  border-radius: 6px;
-}
-
-.repo-list a:hover {
-  background: #1c2128;
-  border-color: #58a6ff;
-}
-
-.repo-path {
-  font-size: 12px;
-  color: #8b949e;
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
-  margin-top: 4px;
-}
-
-.dup-btn {
-  padding: 0 10px;
-  border: 1px solid #30363d;
-  border-left: none;
-  background: #161b22;
-  color: #8b949e;
-  font-size: 14px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-}
-
-.dup-btn:hover {
-  background: #30363d;
-  color: #e6edf3;
-}
-
-.delete-btn {
-  padding: 0 14px;
-  border: 1px solid #30363d;
-  border-left: none;
-  border-radius: 0 6px 6px 0;
-  background: #161b22;
-  color: #f85149;
-  font-size: 16px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-}
-
-.delete-btn:hover {
-  background: #da3633;
-  color: #fff;
-  border-color: #da3633;
-}
-
-.empty-msg {
-  color: #8b949e;
-  font-size: 14px;
-  padding: 12px 0;
-}
-</style>
+<link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 <h1>Differ</h1>
 
 <form class="add-form" id="add-form">
   <input type="text" id="slug-input" placeholder="slug" required>
-  <input type="text" id="path-input" placeholder="/path/to/repo" style="flex:1" required>
+  <input type="text" id="path-input" class="path-input" placeholder="/path/to/repo" required>
   <button type="submit">Add repo</button>
 </form>
 <div class="error-msg" id="error-msg"></div>
 
 <ul class="repo-list" id="repo-list"></ul>
-<div class="empty-msg" id="empty-msg" {% if repos %}style="display:none"{% endif %}>
+<div class="empty-msg" id="empty-msg">
   No repositories configured. Add one above.
 </div>
 
@@ -208,15 +38,65 @@ function showError(msg) {
 
 function updateEmpty() {
   const hasRepos = list.querySelector('li[data-slug]') !== null;
-  emptyMsg.style.display = hasRepos ? 'none' : '';
+  emptyMsg.style.display = hasRepos ? 'none' : 'block';
 }
 
 function repoItemHtml(slug, path) {
   const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   return '<a href="/' + esc(slug) + '/">' + esc(slug) +
     '<div class="repo-path">' + esc(path) + '</div></a>' +
+    '<button class="edit-btn" title="Rename slug">&#x270E;</button>' +
     '<button class="dup-btn" title="Duplicate repo" data-path="' + esc(path) + '">&#x2398;</button>' +
     '<button class="delete-btn" title="Delete repo">&times;</button>';
+}
+
+function startEditSlug(li) {
+  if (li.querySelector('.repo-edit')) return;
+  const oldSlug = li.dataset.slug;
+  const link = li.querySelector('a');
+  const path = link.querySelector('.repo-path').textContent;
+
+  const editor = document.createElement('div');
+  editor.className = 'repo-edit';
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'edit-slug';
+  input.value = oldSlug;
+  const pathDiv = document.createElement('div');
+  pathDiv.className = 'repo-path';
+  pathDiv.textContent = path;
+  editor.appendChild(input);
+  editor.appendChild(pathDiv);
+  link.replaceWith(editor);
+  input.focus();
+  input.select();
+
+  let done = false;
+  const finish = async (commit) => {
+    if (done) return;
+    done = true;
+    if (commit) {
+      const newSlug = input.value.trim();
+      if (newSlug && newSlug !== oldSlug) {
+        const res = await fetch('/api/repos/' + encodeURIComponent(oldSlug), {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ slug: newSlug }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          showError(data.error || 'Failed to rename slug');
+        }
+      }
+    }
+    await refreshRepoList();
+  };
+
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+    else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+  });
+  input.addEventListener('blur', () => finish(true));
 }
 
 // Canonicalize a remote URL so different URL forms for the same repo group together.
@@ -323,6 +203,12 @@ form.addEventListener('submit', async (e) => {
 });
 
 list.addEventListener('click', (e) => {
+  const editBtn = e.target.closest('.edit-btn');
+  if (editBtn) {
+    e.preventDefault();
+    startEditSlug(editBtn.closest('li'));
+    return;
+  }
   const dupBtn = e.target.closest('.dup-btn');
   if (dupBtn) {
     e.preventDefault();

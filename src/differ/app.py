@@ -247,7 +247,7 @@ def repo_entry(slug: str, path: str) -> dict[str, Any]:
 
 @app.get("/")
 def repos_index() -> str:
-    return render_template("repos.html", repos=REPOS)
+    return render_template("repos.html")
 
 
 @app.get("/api/repos")
@@ -285,13 +285,30 @@ def update_repo(slug: str) -> tuple[Response, int] | Response:
     if not data:
         return jsonify({"error": "Request body required"}), 400
 
-    path = (data.get("path") or "").strip()
-    if not path or not os.path.isdir(path):
+    new_slug = (data.get("slug") or slug).strip()
+    if "path" in data:
+        new_path = (data.get("path") or "").strip()
+    else:
+        new_path = REPOS[slug]
+
+    if not new_slug or not SLUG_RE.match(new_slug):
+        return jsonify({"error": "slug must be non-empty alphanumeric with hyphens"}), 400
+    if new_slug != slug and new_slug in REPOS:
+        return jsonify({"error": f"Repo '{new_slug}' already exists"}), 409
+    if not new_path or not os.path.isdir(new_path):
         return jsonify({"error": "path must be an existing directory"}), 400
 
-    REPOS[slug] = path
+    if new_slug != slug:
+        items = list(REPOS.items())
+        REPOS.clear()
+        for k, v in items:
+            REPOS[new_slug if k == slug else k] = new_path if k == slug else v
+        if slug in comments:
+            comments[new_slug] = comments.pop(slug)
+    else:
+        REPOS[slug] = new_path
     save_repos()
-    return jsonify(repo_entry(slug, path))
+    return jsonify(repo_entry(new_slug, new_path))
 
 
 @app.delete("/api/repos/<slug>")
