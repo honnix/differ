@@ -220,6 +220,28 @@ def get_repo_path(repo: str) -> str:
     return path
 
 
+def get_origin_url(path: str) -> str | None:
+    """Best-effort lookup of the origin remote URL for a repo path."""
+    try:
+        result = subprocess.run(
+            ["git", "-C", path, "remote", "get-url", "origin"],
+            capture_output=True,
+            text=True,
+            timeout=2,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if result.returncode != 0:
+        return None
+    url = result.stdout.strip()
+    return url or None
+
+
+def repo_entry(slug: str, path: str) -> dict[str, Any]:
+    return {"slug": slug, "path": path, "remote_url": get_origin_url(path)}
+
+
 # --- Routes ---
 
 
@@ -230,7 +252,7 @@ def repos_index() -> str:
 
 @app.get("/api/repos")
 def api_repos() -> Response:
-    return jsonify([{"slug": slug, "path": path} for slug, path in REPOS.items()])
+    return jsonify([repo_entry(slug, path) for slug, path in REPOS.items()])
 
 
 @app.post("/api/repos")
@@ -251,7 +273,7 @@ def add_repo() -> tuple[Response, int] | Response:
 
     REPOS[slug] = path
     save_repos()
-    return jsonify({"slug": slug, "path": path}), 201
+    return jsonify(repo_entry(slug, path)), 201
 
 
 @app.put("/api/repos/<slug>")
@@ -269,7 +291,7 @@ def update_repo(slug: str) -> tuple[Response, int] | Response:
 
     REPOS[slug] = path
     save_repos()
-    return jsonify({"slug": slug, "path": path})
+    return jsonify(repo_entry(slug, path))
 
 
 @app.delete("/api/repos/<slug>")

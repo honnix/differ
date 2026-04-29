@@ -75,6 +75,35 @@ h1 {
   align-items: stretch;
 }
 
+.repo-group-header {
+  display: block;
+  padding: 4px 4px;
+  margin-top: 12px;
+  margin-bottom: 6px;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  font-size: 12px;
+  color: #8b949e;
+}
+
+.repo-group-header:first-child {
+  margin-top: 0;
+}
+
+.repo-list li.in-group {
+  margin-left: 16px;
+  position: relative;
+}
+
+.repo-list li.in-group::before {
+  content: "";
+  position: absolute;
+  left: -10px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #30363d;
+}
+
 .repo-list a {
   flex: 1;
   display: block;
@@ -158,18 +187,7 @@ h1 {
 </form>
 <div class="error-msg" id="error-msg"></div>
 
-<ul class="repo-list" id="repo-list">
-  {% for slug, path in repos.items() %}
-  <li data-slug="{{ slug }}">
-    <a href="/{{ slug }}/">
-      {{ slug }}
-      <div class="repo-path">{{ path }}</div>
-    </a>
-    <button class="dup-btn" title="Duplicate repo" data-path="{{ path }}">&#x2398;</button>
-    <button class="delete-btn" title="Delete repo">&times;</button>
-  </li>
-  {% endfor %}
-</ul>
+<ul class="repo-list" id="repo-list"></ul>
 <div class="empty-msg" id="empty-msg" {% if repos %}style="display:none"{% endif %}>
   No repositories configured. Add one above.
 </div>
@@ -189,7 +207,8 @@ function showError(msg) {
 }
 
 function updateEmpty() {
-  emptyMsg.style.display = list.children.length === 0 ? '' : 'none';
+  const hasRepos = list.querySelector('li[data-slug]') !== null;
+  emptyMsg.style.display = hasRepos ? 'none' : '';
 }
 
 function repoItemHtml(slug, path) {
@@ -200,19 +219,68 @@ function repoItemHtml(slug, path) {
     '<button class="delete-btn" title="Delete repo">&times;</button>';
 }
 
+// Canonicalize a remote URL so different URL forms for the same repo group together.
+// Returns null when the input is empty/null. Returns a string like "host/owner/repo".
+function normalizeRemote(url) {
+  if (!url) return null;
+  let s = String(url).trim();
+  if (!s) return null;
+  s = s.replace(/\.git$/, '');
+  let m = s.match(/^[\w.-]+@([^:]+):(.+)$/);                 // git@host:owner/repo
+  if (m) return m[1].toLowerCase() + '/' + m[2];
+  m = s.match(/^ssh:\/\/(?:[\w.-]+@)?([^/]+)\/(.+)$/);       // ssh://[user@]host/path
+  if (m) return m[1].toLowerCase() + '/' + m[2];
+  m = s.match(/^https?:\/\/(?:[\w.-]+@)?([^/]+)\/(.+)$/);    // http(s)://host/path
+  if (m) return m[1].toLowerCase() + '/' + m[2];
+  m = s.match(/^git:\/\/([^/]+)\/(.+)$/);                    // git://host/path
+  if (m) return m[1].toLowerCase() + '/' + m[2];
+  return s;
+}
+
+function appendRepoLi(repo, inGroup) {
+  const li = document.createElement('li');
+  li.dataset.slug = repo.slug;
+  if (inGroup) li.classList.add('in-group');
+  li.innerHTML = repoItemHtml(repo.slug, repo.path);
+  list.appendChild(li);
+}
+
 async function refreshRepoList() {
   const res = await fetch('/api/repos');
   if (!res.ok) return;
   const repos = await res.json();
-  list.innerHTML = '';
+
+  const buckets = new Map();
   for (const r of repos) {
-    const li = document.createElement('li');
-    li.dataset.slug = r.slug;
-    li.innerHTML = repoItemHtml(r.slug, r.path);
-    list.appendChild(li);
+    const key = normalizeRemote(r.remote_url);
+    const bucketKey = key === null ? '\0solo:' + r.slug : key;
+    if (!buckets.has(bucketKey)) buckets.set(bucketKey, { key, repos: [] });
+    buckets.get(bucketKey).repos.push(r);
   }
+
+  const groups = [];
+  const singletons = [];
+  for (const b of buckets.values()) {
+    if (b.key !== null && b.repos.length >= 2) groups.push(b);
+    else singletons.push(...b.repos);
+  }
+  groups.sort((a, b) => a.key.localeCompare(b.key));
+  for (const g of groups) g.repos.sort((a, b) => a.slug.localeCompare(b.slug));
+
+  list.innerHTML = '';
+  for (const g of groups) {
+    const header = document.createElement('li');
+    header.className = 'repo-group-header';
+    header.textContent = g.key;
+    list.appendChild(header);
+    for (const r of g.repos) appendRepoLi(r, true);
+  }
+  for (const r of singletons) appendRepoLi(r, false);
+
   updateEmpty();
 }
+
+refreshRepoList();
 
 // Auto-fill slug from the last path segment
 pathInput.addEventListener('input', () => {
